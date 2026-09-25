@@ -180,3 +180,14 @@ flowchart LR
 - 원인: 오늘의 문장을 첫 화면으로 고정하면서 "마지막 탭 기억" 코드를 지울 때 세미콜론까지 같이 지웠어요. 그래서 탭 클릭 코드가 `S.revealed=falserender()`가 됐어요. 문법상으로는 맞아서 구문 검사를 통과했지만, 누를 때마다 ReferenceError가 났어요.
 - 수정: `S.revealed=false;render();`
 - 재발 방지 확인: supabase 클라이언트를 가짜 데이터로 대체한 로컬 사본에서 6개 탭을 모두 누르고, 탭 안의 코멘트, 펼치기, 필터, 주제 버튼을 전부 눌러 봤어요. 런타임 오류는 0건이었어요.
+
+### 2026-09-25 · 예문·추천 표현 팩트체크 (웹 리서치)
+- 대상: 영어 문장 86개 (용어집 예문 36개, 번역 연습 추천 번역 24개, 대안 26개).
+- 방법: 부자연스러울 수 있는 표현을 골라 뉴스, 사전, 비즈니스 메일 가이드, 항공사·공항 안내 등 실제 쓰임을 검색해 확인했어요.
+- 실제 쓰임이 확인되어 유지한 것: ease pressure on rents(Bloomberg 기사), bail on(약속 펑크, 구어), wiped out(녹초, 사전 등재), Something has come up on our end(일정 변경 메일 템플릿), expects revenue to grow ~% year over year(실적 발표문), data were/was(학술은 복수, 일반은 단수도 허용).
+- 수정 5건 (`supabase/data/20260925_factcheck_fixes.sql`)
+  - dr-m2: Your skin will notice first → Your skin will feel the difference first. "notice first"는 카피에서 쓰는 조합이 확인되지 않았고, "feel the difference"가 스킨케어 광고의 정형 표현이에요.
+  - dr-b2: Please find attached → I've attached. 여러 비즈니스 메일 가이드가 "Please find attached"를 딱딱하고 오래된 문구로 봐요. 대안으로 남기고 설명을 붙였어요.
+  - dr-t4: Do you take card? → Do you take cards? 단수형은 영국·호주 구어라는 설명을 추가했고, 대안 Is card okay?는 Can I pay by card?로 바꿨어요.
+  - dr-t5: 공항에서 쓰는 실제 명칭(baggage service office)과 carousel 표현으로 다듬었어요.
+  - dr-t6 대안: tomorrow's morning tour → tomorrow morning's tour (소유격 위치 오류).
