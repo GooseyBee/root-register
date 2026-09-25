@@ -544,9 +544,8 @@ function vDrills(){
 
 /* ---------- requests (건의함) ---------- */
 function vGuide(){
-  let open=true;try{open=localStorage.getItem("rr.reqGuide")!=="closed"}catch(e){}
   const st=(k,d)=>'<dt><span class="chip st-'+k+'">'+STATUS[k]+'</span></dt><dd>'+d+'</dd>';
-  return '<details class="guide" data-key="req-guide"'+(open?" open":"")+'><summary>건의함은 이렇게 써요</summary><div class="gbody">'+
+  return '<details class="guide" data-key="req-guide"'+(S.open.has("req-guide")?" open":"")+'><summary>건의함은 이렇게 써요</summary><div class="gbody">'+
     '<p>앱에서 바꾸고 싶은 점, 있었으면 하는 기능, 불편한 점을 자유롭게 올려 주세요. 올라온 건의는 희주와 Claude가 함께 보고 반영해요.</p>'+
     '<p class="sub" style="margin:0">진행 순서</p><ol>'+
       '<li><b>건의 올리기</b>를 눌러 제목, 종류, 내용을 적고 <b>올리기</b>를 눌러요.</li>'+
@@ -700,7 +699,6 @@ document.addEventListener("keyup",e=>{if(e.target.id==="f-q"){const ae=e.target,
   const saved=document.activeElement;saved.blur();render();const n=document.getElementById("f-q");if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}});
 document.addEventListener("toggle",e=>{
   const d=e.target;if(!(d instanceof HTMLDetailsElement)||!d.dataset.key)return;
-  if(d.dataset.key==="req-guide"){try{localStorage.setItem("rr.reqGuide",d.open?"open":"closed")}catch(_){}return}
   if(d.dataset.key.startsWith("sess-"))S.open.add("touched-sess");
   if(d.open)S.open.add(d.dataset.key);else S.open.delete(d.dataset.key);
 },true);
