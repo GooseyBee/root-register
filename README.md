@@ -105,5 +105,6 @@ flowchart LR
   - `terms` 조회는 빈 배열이 돌아와요(RLS 차단).
   - `rpc/is_member`는 권한 거부가 나요.
   - `examples` 함수는 401이 돌아와요.
-- 남은 설정: Auth URL Configuration(Site URL, Redirect URL), 친구 멤버 등록.
+- 남은 설정: Auth URL Configuration(Site URL, Redirect URL).
 - 사용자가 Anthropic Console에서 API 키를 만들어 Supabase Edge Function secret `ANTHROPIC_API_KEY`로 등록했어요. 키는 저장소와 대화에 남기지 않았어요.
+- 멤버 2명(통번역사, 카피라이터)을 표시 이름과 함께 `members`에 등록했어요. 이메일은 DB에만 있어요.
