@@ -640,6 +640,9 @@ async function authSubmit(form){
   else if(mode==="signup"){
     if(pw!==((document.getElementById("l-pw2")||{}).value||"")){flash("비밀번호가 서로 달라요.");return}
     r=await S.sb.auth.signUp({email,password:pw,options:{emailRedirectTo:back}});
+    // 이미 가입된 이메일이면 Supabase는 오류 없이 identities가 빈 user를 돌려주고 메일을 보내지 않는다
+    if(!r.error&&r.data&&r.data.user&&Array.isArray(r.data.user.identities)&&r.data.user.identities.length===0){
+      S.authMode="reset";flash("이미 가입된 이메일이에요. 아래에서 비밀번호 재설정 링크를 받아 비밀번호를 정해 주세요.");return}
     if(!r.error){S.sent=email+" 으로 가입 확인 메일을 보냈어요. 링크를 누르면 로그인돼요.";clear(["l-email"]);render();return}
   }else if(mode==="reset"){
     r=await S.sb.auth.resetPasswordForEmail(email,{redirectTo:back});
