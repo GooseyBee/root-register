@@ -157,6 +157,14 @@ details.sess>summary::-webkit-details-marker{display:none}
 .past{display:grid;gap:10px;padding:0 16px 16px}
 .past .row{display:flex;gap:10px;align-items:baseline}
 .past .row p{margin:0;flex:1;font-size:14px}
+.drill{display:grid;gap:12px}
+.drill .ko{margin:0;font:700 19px/1.5 var(--serif)}
+.drill .ctx{margin:0;font-size:12px;color:var(--muted)}
+.drill .status{display:flex;flex-wrap:wrap;gap:6px}
+.chip.done{background:var(--en-soft);color:var(--en)}
+.model{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.model .best{margin:0;font:600 17px/1.5 var(--sans);color:var(--en)}
+.model ul{margin:0;padding-left:18px;font-size:14px}
 .login{max-width:420px;display:grid;gap:12px;margin:24px auto}
 .login h2{margin:0;font:700 20px var(--serif)}
 @media (prefers-reduced-motion:no-preference){.flash{transition:border-color .2s}}
@@ -173,6 +181,7 @@ details.sess>summary::-webkit-details-marker{display:none}
   <div class="stats" id="stats"></div>
   <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="daily">오늘의 문장</button>
+    <button role="tab" data-tab="drills">번역 연습</button>
     <button role="tab" data-tab="review">오늘의 복습</button>
     <button role="tab" data-tab="terms">용어집</button>
     <button role="tab" data-tab="sessions">세션 기록</button>
@@ -187,12 +196,14 @@ details.sess>summary::-webkit-details-marker{display:none}
 const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테크","공문·행정"];
 const REGISTERS=["구어","문어","전문"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
-const TABS=["daily","review","terms","sessions","taglines"];
+const TABS=["daily","drills","review","terms","sessions","taglines"];
+const TOPICS=[["marketing","마케팅·광고"],["business","비즈니스·이메일"],["daily","일상 회화"],["travel","여행 표현"]];
 
 const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
-  favOnly:{terms:false,sessions:false,taglines:false},cmtOpen:new Set(),
+  favOnly:{terms:false,sessions:false,taglines:false},
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillFilter:"all",cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -258,7 +269,7 @@ function flash(m){S.msg=m;render();setTimeout(()=>{if(S.msg===m){S.msg="";render
 function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
   $("#stats").innerHTML=
-    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
+    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
 }
 function render(){
@@ -274,7 +285,7 @@ function render(){
   else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 은(는) 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
   else{
     if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
-    h+=({daily:vDaily,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines})[S.tab]();
+    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines})[S.tab]();
   }
   $("#panel").innerHTML=h;
   for(const [id,v] of S.dirty){const el=document.getElementById(id);if(el)el.value=v}
@@ -437,6 +448,41 @@ function vDaily(){
   return h;
 }
 
+/* ---------- translation drills ---------- */
+function vDrills(){
+  const members=Object.keys(S.names);
+  const submitted=(id,who)=>S.drillStatus.some(x=>x.drill_id===id&&x.author===who);
+  let h='<div class="rv-top"><div class="seg" role="group" aria-label="주제">'+
+    TOPICS.map(([k,l])=>'<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+'</button>').join("")+'</div>'+
+    '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
+  h+='<p class="note">한국어 문장을 영어로 옮겨 제출하세요. 내가 제출해야 상대 번역이 보이고, 모두 제출하면 추천 표현이 열려요.</p>';
+  const list=S.drills.filter(d=>d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="fav"||isFav("drill",d.id))).sort((a,b)=>a.sort-b.sort);
+  if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":"표시할 문장이 없어요.")+'</div>';
+  return h+list.map(d=>{
+    const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
+    const others=S.drillAns.filter(a=>a.drill_id===d.id&&a.author!==S.uid);
+    const allIn=members.length>0&&members.every(m=>submitted(d.id,m));
+    const model=S.drillModels[d.id],k="drill:"+d.id,open=S.open.has("model-"+d.id);
+    let c='<article class="card drill"><p class="ctx">'+esc(d.context)+'</p><p class="ko">'+esc(d.ko)+'</p>'+
+      '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
+    if(S.canWrite)c+='<label class="f">내 번역<textarea id="da-'+esc(d.id)+'" lang="en" placeholder="영어로 번역해 보세요">'+esc(mine?mine.body:"")+'</textarea></label>'+
+      '<div class="row-actions"><button class="btn small'+(mine?"":" primary")+'" data-action="drill-save" data-id="'+esc(d.id)+'">'+(mine?"수정":"제출")+'</button>'+(mine?'<span class="note">제출함</span>':"")+'</div>';
+    if(mine){
+      if(others.length)c+='<div class="vers">'+others.map(a=>'<div class="ver">'+whoHTML(a.author)+'<p lang="en">'+esc(a.body)+'</p></div>').join("")+'</div>';
+      else c+='<p class="note">상대가 제출하면 번역이 보여요.</p>';
+    }
+    if(allIn&&model){
+      if(!open)c+='<button class="reveal" data-action="drill-model" data-id="'+esc(d.id)+'">추천 표현 보기</button>';
+      else c+='<div class="model"><p class="sub" style="margin:0">추천 표현</p><p class="best" lang="en">'+esc(model.best)+'</p>'+
+        ((model.alternatives||[]).length?'<p class="sub" style="margin:0">다르게 말하면</p><ul>'+model.alternatives.map(x=>'<li lang="en">'+esc(x)+'</li>').join("")+'</ul>':"")+
+        ((model.notes||[]).length?'<p class="sub" style="margin:0">포인트</p><dl class="dwords">'+model.notes.map(n=>'<dt lang="en">'+esc(n.phrase)+'</dt><dd>'+esc(n.why)+'</dd>').join("")+'</dl>':"")+
+        '<div><button class="link" data-action="drill-model" data-id="'+esc(d.id)+'">접기</button></div></div>';
+    }else if(!allIn)c+='<p class="note">추천 표현은 모두 제출하면 열려요.</p>';
+    c+='<div class="social">'+starBtn("drill",d.id)+commentBlock("drill",d.id)+'</div></article>';
+    return c;
+  }).join("");
+}
+
 /* ---------- writes ---------- */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():""}
 function clear(ids){for(const i of ids)S.dirty.delete(i)}
@@ -491,6 +537,14 @@ document.addEventListener("click",async e=>{
   else if(a==="fav-only"){const l=b.dataset.list;S.favOnly[l]=!S.favOnly[l];render()}
   else if(a==="cmt-toggle"){const k=b.dataset.k;S.cmtOpen.has(k)?S.cmtOpen.delete(k):S.cmtOpen.add(k);render()}
   else if(a==="cmt-del"){S.confirm=null;await write(()=>S.sb.from("comments").delete().eq("id",id),"코멘트를 지웠어요.")}
+  else if(a==="drill-topic"){S.drillTopic=b.dataset.v;render()}
+  else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
+  else if(a==="drill-model"){const k="model-"+id;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
+  else if(a==="drill-save"){
+    const v=((document.getElementById("da-"+id)||{}).value||"").trim();
+    if(!v){flash("번역을 입력해 주세요.");return}
+    if(await write(()=>S.sb.from("drill_answers").upsert({drill_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 제출했어요."))clear(["da-"+id]);
+  }
   else if(a==="daily-open"){S.dailyOpen=true;render()}
   else if(a==="daily-close"){S.dailyOpen=false;render()}
   else if(a==="goto-term"){const t=S.terms.find(x=>x.id===id);if(t){S.tab="terms";S.f={q:t.word,lang:"all",reg:"all",dom:"all"};S.shown.add(t.id);render()}}
@@ -574,10 +628,16 @@ const loaders={
     const cur=(rows||[]).find(x=>S.daily&&x.day===S.daily.day);if(cur)S.daily=cur;
     S.dailyPast=(rows||[]).filter(x=>!S.daily||x.day!==S.daily.day).slice(0,7);
   },
+  async drills(){
+    const [a,b,c,d]=await Promise.all([S.sb.from("drills").select("*"),S.sb.from("drill_answers").select("*"),S.sb.from("drill_models").select("*"),S.sb.rpc("drill_status")]);
+    for(const r of [a,b,c,d])if(r.error)throw r.error;
+    S.drills=a.data;S.drillAns=b.data;S.drillStatus=d.data||[];
+    S.drillModels={};for(const m of c.data)S.drillModels[m.drill_id]=m;
+  },
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
