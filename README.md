@@ -90,3 +90,19 @@ flowchart LR
 - 첫 프로덕션 배포를 했어요: https://root-register.vercel.app
 - 아직 Supabase를 연결하지 않아서, 사이트는 열리지만 설정 안내 화면이 보여요.
 - `vercel git connect`는 실패했어요. Vercel GitHub 앱이 이 비공개 저장소에 접근할 권한이 없어서예요. 권한을 주기 전까지는 `npx vercel deploy --prod`로 직접 배포해요.
+
+### 2026-09-25 · Supabase 연결
+- claude.ai Supabase 커넥터로 `root-register` 프로젝트를 만들었어요(서울 `ap-northeast-2`, ref `djhrnlatrtrfmmcjekqk`).
+- 초기 마이그레이션과 예시 데이터를 넣었어요. 용어 13개(예문 52개), 어근 짝 8개, 세션 원문 2개예요.
+- 소유자 이메일 1개를 `members`에 등록했어요. 이메일은 DB에만 있고 저장소에는 없어요.
+- 보안 점검(advisor) 경고 3건을 처리했어요(`20260925010000_harden_functions.sql`).
+  - `me()`의 search_path를 고정했어요.
+  - 로그인하지 않은 사용자(anon)의 `is_member()` 실행 권한을 회수했어요.
+  - authenticated 사용자의 `is_member()` 경고는 RLS 정책에 꼭 필요한 권한이라 그대로 뒀어요.
+- Edge Function `examples`를 배포했어요(JWT 검증 사용). `ANTHROPIC_API_KEY` secret은 아직 넣지 않았어요.
+- `docs/config.js`에 프로젝트 URL과 공개용(publishable) 키를 넣고 Vercel에 다시 배포했어요.
+- 로그인하지 않은 상태로 확인한 결과:
+  - `terms` 조회는 빈 배열이 돌아와요(RLS 차단).
+  - `rpc/is_member`는 권한 거부가 나요.
+  - `examples` 함수는 401이 돌아와요.
+- 남은 설정: Auth URL Configuration(Site URL, Redirect URL), 친구 멤버 등록, API 키 등록.
