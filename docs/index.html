@@ -719,6 +719,8 @@ function vSessionGuide(){
     '<p class="tip">함께 번역은 상대 번역이 바로 보여요. 먼저 내 번역을 끝낸 다음에 상대 것을 열어 보세요. 서로 안 보고 겨루고 싶으면 <b>번역 연습</b> 탭을 쓰면 돼요. 거기는 내가 제출해야 상대 번역이 보여요.</p>'+
     '<p class="note" style="margin:0">원문마다 별(★)과 코멘트를 달 수 있어요. 지난 회차는 목록 아래에 접혀 있어요.</p>');
 }
+// 2026. 9. 25. 오후 10:30 형식 (한국 시간)
+function fmtTime(t){return t?new Date(t).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"numeric",day:"numeric",hour:"numeric",minute:"2-digit"}):""}
 function vRequests(){
   let h=vGuide();
   if(S.canWrite)h+='<details class="add" data-key="add-req"'+(S.open.has("add-req")?" open":"")+'><summary>건의 올리기</summary><form data-form="request">'+
@@ -732,7 +734,7 @@ function vRequests(){
   if(!list.length)return h+'<div class="empty">'+(S.reqFilter==="open"?"진행 중인 건의가 없어요. 바꾸고 싶은 점이 있으면 올려 주세요.":"표시할 건의가 없어요.")+'</div>';
   return h+list.map(r=>{
     const mine=r.author===S.uid,editing=S.reqEdit===r.id;
-    let c='<article class="card req"><div class="meta"><span class="chip st-'+esc(r.status)+'">'+esc(STATUS[r.status]||r.status)+'</span><span class="chip">'+esc(r.kind)+'</span>'+whoHTML(r.author)+'<span class="sdate">'+esc(String(r.created_at).slice(0,10))+'</span></div>';
+    let c='<article class="card req"><div class="meta"><span class="chip st-'+esc(r.status)+'">'+esc(STATUS[r.status]||r.status)+'</span><span class="chip">'+esc(r.kind)+'</span>'+whoHTML(r.author)+'<span class="sdate" title="올린 시각">'+esc(fmtTime(r.created_at))+'</span>'+(r.updated_at&&new Date(r.updated_at)-new Date(r.created_at)>60000?'<span class="note">· 수정 '+esc(fmtTime(r.updated_at))+'</span>':"")+'</div>';
     if(editing){
       c+='<label class="f">제목<input type="text" id="qe-title-'+esc(r.id)+'" value="'+esc(r.title)+'"></label>'+
         '<label class="f">종류<select id="qe-kind-'+esc(r.id)+'">'+opt(KINDS,r.kind)+'</select></label>'+
