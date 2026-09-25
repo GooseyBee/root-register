@@ -307,7 +307,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,verEdit:new Set(),briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -392,7 +392,7 @@ function render(){
   else if(S.dbState==="loading")h+='<div class="empty">노트를 불러오는 중…</div>';
   else if(S.dbState==="off")h+='<div class="banner">설정(config.js)을 불러오지 못했어요. 관리자에게 알려 주세요.</div>';
   else if(S.dbState==="login")h+=vLogin();
-  else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 은(는) 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
+  else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 계정은 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
   else{
     if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
     h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests,names:vNames})[S.tab]();
@@ -495,21 +495,24 @@ function vSessions(){
       (S.canWrite?'<div class="row-actions">'+(S.confirm===s.id?'<button class="btn small danger" data-action="del" data-col="sessions" data-id="'+esc(s.id)+'">원문 삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(s.id)+'">원문 삭제</button>')+'</div>':"")+
       '</div></details>'}).join("");
 }
-// 내 번역: 저장 전에는 입력칸, 저장 후에는 잠긴 읽기 전용 + 수정 버튼
+// 제출칸 공통: 저장 전에는 입력칸, 저장 후에는 잠긴 읽기 전용 + 수정 버튼(수정 중에는 저장·취소).
+// o = {key, label, value, at, ta(입력 id), action, attrs, lang, ph, submitLabel, savedWord, hint}
+function lockBox(o){
+  const editing=!o.value||S.editing.has(o.key),lang=o.lang?' lang="'+o.lang+'"':'';
+  if(editing)return '<div class="ver"><label class="f">'+o.label+(o.value?' <span class="note">(수정 중)</span>':'')+
+    '<textarea id="'+esc(o.ta)+'"'+lang+(o.ph?' placeholder="'+esc(o.ph)+'"':'')+'>'+esc(o.value||"")+'</textarea></label>'+
+    '<div class="row-actions"><button class="btn small primary" data-action="'+o.action+'" '+o.attrs+'>'+(o.value?"저장":(o.submitLabel||"저장"))+'</button>'+
+    (o.value?'<button class="link" data-action="lk-cancel" data-k="'+esc(o.key)+'" data-ta="'+esc(o.ta)+'">취소</button>':'<span class="note">'+(o.hint||"저장하면 잠겨요. 고치려면 수정을 눌러요.")+'</span>')+'</div></div>';
+  const when=o.at?new Date(o.at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
+  return '<div class="ver saved"><div class="ver-head"><span class="f" style="margin:0">'+o.label+'</span><span class="saved-tag">✓ '+(o.savedWord||"저장됨")+(when?' · '+esc(when):'')+'</span></div>'+
+    '<p'+lang+'>'+esc(o.value)+'</p><div class="row-actions"><button class="btn small" data-action="lk-edit" data-k="'+esc(o.key)+'" data-ta="'+esc(o.ta)+'">수정</button></div></div>';
+}
 function myVersion(s,mine){
-  const id=esc(s.id),editing=!mine||S.verEdit.has(s.id);
-  if(editing)return '<div class="ver"><label class="f">내 번역'+(mine?' <span class="note">(수정 중)</span>':'')+'<textarea id="v-'+id+'">'+esc(mine||"")+'</textarea></label>'+
-    '<div class="row-actions"><button class="btn small primary" data-action="save-ver" data-id="'+id+'">저장</button>'+
-    (mine?'<button class="link" data-action="ver-cancel" data-id="'+id+'">취소</button>':'')+
-    '<span class="note">저장하면 잠겨요. 고치려면 수정을 눌러요.</span></div></div>';
-  const at=(s.versionsAt||{})[S.uid];
-  const when=at?new Date(at).toLocaleString("ko-KR",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"}):"";
-  return '<div class="ver saved"><div class="ver-head"><span class="f" style="margin:0">내 번역</span><span class="saved-tag">✓ 저장됨'+(when?' · '+esc(when):'')+'</span></div>'+
-    '<p>'+esc(mine)+'</p><div class="row-actions"><button class="btn small" data-action="ver-edit" data-id="'+id+'">수정</button></div></div>';
+  return lockBox({key:"ver:"+s.id,label:"내 번역",value:mine,at:(s.versionsAt||{})[S.uid],ta:"v-"+s.id,action:"save-ver",attrs:'data-id="'+esc(s.id)+'"'});
 }
 function field(s,k,label,ph){
   if(!S.canWrite)return s[k]?'<div><p class="sub">'+label+'</p><p class="src">'+esc(s[k])+'</p></div>':"";
-  return '<div><label class="f">'+label+'<textarea id="'+k+'-'+esc(s.id)+'" placeholder="'+ph+'">'+esc(s[k]||"")+'</textarea></label><div class="row-actions" style="margin-top:6px"><button class="btn small" data-action="save-field" data-k="'+k+'" data-id="'+esc(s.id)+'">저장</button></div></div>';
+  return lockBox({key:"f:"+k+":"+s.id,label,value:s[k]||"",ta:k+"-"+s.id,action:"save-field",attrs:'data-k="'+k+'" data-id="'+esc(s.id)+'"',ph,hint:"둘 다 고칠 수 있어요. 저장하면 잠겨요."});
 }
 
 function vCopyGuide(){
@@ -527,9 +530,11 @@ function vCopyGuide(){
 }
 function copyItem(t){
   const mine=t.addedBy===S.uid;
+  if(mine&&S.editing.has("c:"+t.id))return '<div class="copy mine"><label class="f">카피 <span class="note">(수정 중)</span><input type="text" id="ce-'+esc(t.id)+'" lang="en" value="'+esc(t.text)+'"></label>'+
+    '<div class="row-actions"><button class="btn small primary" data-action="copy-save" data-id="'+esc(t.id)+'">저장</button><button class="link" data-action="lk-cancel" data-k="c:'+esc(t.id)+'" data-ta="ce-'+esc(t.id)+'">취소</button></div></div>';
   return '<div class="copy'+(mine?" mine":"")+'"><p class="t" lang="en">'+esc(t.text)+'</p>'+(t.brief&&!t.brief_id?'<p class="note" style="margin:0">'+esc(t.brief)+'</p>':"")+
     '<div class="social">'+whoHTML(t.addedBy)+starBtn("tagline",t.id)+commentBlock("tagline",t.id)+
-    (mine&&S.canWrite?(S.confirm===t.id?'<button class="link" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div></div>';
+    (mine&&S.canWrite?(S.confirm===t.id?'<button class="link" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="lk-edit" data-k="c:'+esc(t.id)+'" data-ta="ce-'+esc(t.id)+'">수정</button><button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div></div>';
 }
 function briefCard(b){
   const members=Object.keys(S.names);
@@ -625,8 +630,7 @@ function vDrills(){
     const model=S.drillModels[d.id],k="drill:"+d.id,open=S.open.has("model-"+d.id);
     let c='<article class="card drill"><p class="ctx">'+esc(d.context)+'</p><p class="ko">'+esc(d.ko)+'</p>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
-    if(S.canWrite)c+='<label class="f">내 번역<textarea id="da-'+esc(d.id)+'" lang="en" placeholder="영어로 번역해 보세요">'+esc(mine?mine.body:"")+'</textarea></label>'+
-      '<div class="row-actions"><button class="btn small'+(mine?"":" primary")+'" data-action="drill-save" data-id="'+esc(d.id)+'">'+(mine?"수정":"제출")+'</button>'+(mine?'<span class="note">제출함</span>':"")+'</div>';
+    if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang:"en",ph:"영어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 상대 번역이 열려요."});
     if(mine){
       if(others.length)c+='<div class="vers">'+others.map(a=>'<div class="ver">'+whoHTML(a.author)+'<p lang="en">'+esc(a.body)+'</p></div>').join("")+'</div>';
       else c+='<p class="note">상대가 제출하면 번역이 보여요.</p>';
@@ -688,7 +692,7 @@ function vSessionGuide(){
     '</dl>'+
     '<p class="sub" style="margin:0">칸마다 쓰는 법</p><dl class="sts">'+
       '<dt><span class="chip">내 번역</span></dt><dd>내 것만 고칠 수 있어요. 상대 번역은 옆에 보여요.</dd>'+
-      '<dt><span class="chip">합의안</span></dt><dd>둘 다 고칠 수 있어요. 마지막에 저장한 내용이 남아요.</dd>'+
+      '<dt><span class="chip">합의안</span></dt><dd>둘 다 고칠 수 있어요. 저장하면 잠기고, 수정을 눌러 고쳐요. 마지막에 저장한 내용이 남아요.</dd>'+
       '<dt><span class="chip">메모</span></dt><dd>둘 다 고칠 수 있어요. 표현, 문법, 다음 과제를 적어요.</dd>'+
     '</dl>'+
     '<p class="tip">함께 번역은 상대 번역이 바로 보여요. 먼저 내 번역을 끝낸 다음에 상대 것을 열어 보세요. 서로 안 보고 겨루고 싶으면 <b>번역 연습</b> 탭을 쓰면 돼요. 거기는 내가 제출해야 상대 번역이 보여요.</p>'+
@@ -725,6 +729,8 @@ function vRequests(){
 }
 
 /* ---------- naming vote (이름 정하기) ---------- */
+// 이름 뒤 주격 조사: 받침 있으면 "이", 없으면 "가". 나 → 내가.
+function subj(m,nm){if(m===S.uid)return "내가";const w=nm(m),c=w.charCodeAt(w.length-1);const has=c>=0xAC00&&c<=0xD7A3?(c-0xAC00)%28!==0:false;return w+(has?"이":"가")}
 function vNames(){
   const members=Object.keys(S.names);
   const nm=m=>m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0];
@@ -756,7 +762,7 @@ function vNames(){
     '<label class="f">왜 어울리는지<input type="text" id="n-why" placeholder="선택"></label>'+
     '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
   if(out.length)h+='<details class="add" data-key="names-out"'+(S.open.has("names-out")?" open":"")+'><summary>빠진 후보 '+out.length+'개</summary><div class="past">'+
-    out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b> <span class="note">· '+esc(nm(c.excluded_by||""))+'이(가) 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
+    out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b> <span class="note">· '+esc(subj(c.excluded_by||"",nm))+' 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
   return h;
 }
 
@@ -774,7 +780,7 @@ async function onSubmit(form){
   if(kind==="term"){
     const word=val("t-word"),meaning=val("t-meaning");if(!word||!meaning)return;
     const doc={word,meaning,pair:val("t-pair"),examples:val("t-example").split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,5).map(x=>{const [a,...b]=x.split("|");return {s:a.trim(),t:b.join("|").trim()}}),register:val("t-reg"),domain:val("t-dom"),lang:isKo(word)?"ko":"en"};
-    if(await write(()=>S.sb.from("terms").insert(doc),"‘"+word+"’을(를) 추가했어요."))clear(["t-word","t-meaning","t-pair","t-example"]);
+    if(await write(()=>S.sb.from("terms").insert(doc),"용어를 추가했어요: ‘"+word+"’"))clear(["t-word","t-meaning","t-pair","t-example"]);
   }else if(kind==="session"){
     const doc={no:Number(val("s-no"))||1,date:val("s-date")||null,dir:val("s-dir"),level:val("s-lvl")||"보통",title:val("s-title"),source:val("s-src")};
     if(!doc.title||!doc.source)return;
@@ -791,7 +797,7 @@ async function onSubmit(form){
     if(await write(()=>S.sb.from("requests").insert({title,kind:val("q-kind"),body:val("q-body")}),"건의를 올렸어요. Claude가 확인할 거예요."))clear(["q-title","q-kind","q-body"]);
   }else if(kind==="name"){
     const name=val("n-name");if(!name)return;
-    if(await write(()=>S.sb.from("name_candidates").insert({name,gloss:val("n-gloss"),why:val("n-why"),shown:true}),"‘"+name+"’을(를) 후보에 추가했어요."))clear(["n-name","n-gloss","n-why"]);
+    if(await write(()=>S.sb.from("name_candidates").insert({name,gloss:val("n-gloss"),why:val("n-why"),shown:true}),"후보를 추가했어요: ‘"+name+"’"))clear(["n-name","n-gloss","n-why"]);
   }else if(kind==="comment"){
     const type=form.dataset.type,id=form.dataset.id,iid="c-"+type+"-"+id,text=val(iid);if(!text)return;
     if(await write(()=>S.sb.from("comments").insert({target_type:type,target_id:id,body:text})))clear([iid]);
@@ -851,7 +857,8 @@ document.addEventListener("click",async e=>{
   else if(a==="drill-save"){
     const v=((document.getElementById("da-"+id)||{}).value||"").trim();
     if(!v){flash("번역을 입력해 주세요.");return}
-    if(await write(()=>S.sb.from("drill_answers").upsert({drill_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 제출했어요."))clear(["da-"+id]);
+    document.activeElement&&document.activeElement.blur();
+    if(await write(()=>S.sb.from("drill_answers").upsert({drill_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 제출했어요.")){clear(["da-"+id]);S.editing.delete("d:"+id);render()}
   }
   else if(a==="daily-open"){S.dailyOpen=true;render()}
   else if(a==="daily-close"){S.dailyOpen=false;render()}
@@ -861,16 +868,23 @@ document.addEventListener("click",async e=>{
   else if(a==="ask"){S.confirm=id;render()}
   else if(a==="cancel"){S.confirm=null;render()}
   else if(a==="del"){S.confirm=null;await write(()=>S.sb.from(b.dataset.col).delete().eq("id",id),"삭제했어요.")}
-  else if(a==="ver-edit"){S.verEdit.add(id);render();const t=document.getElementById("v-"+id);if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
-  else if(a==="ver-cancel"){document.activeElement&&document.activeElement.blur();S.verEdit.delete(id);clear(["v-"+id]);render()}
+  else if(a==="copy-save"){
+    const v=((document.getElementById("ce-"+id)||{}).value||"").trim();if(!v){flash("카피를 입력해 주세요.");return}
+    document.activeElement&&document.activeElement.blur();
+    if(await write(()=>S.sb.from("taglines").update({text:v}).eq("id",id),"카피를 수정했어요.")){clear(["ce-"+id]);S.editing.delete("c:"+id);render()}
+  }
+  else if(a==="lk-edit"){S.editing.add(b.dataset.k);render();const t=document.getElementById(b.dataset.ta);if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
+  else if(a==="lk-cancel"){document.activeElement&&document.activeElement.blur();S.editing.delete(b.dataset.k);clear([b.dataset.ta]);render()}
   else if(a==="save-ver"){
     if(!S.uid)return;const v=((document.getElementById("v-"+id)||{}).value||"").trim();
     document.activeElement&&document.activeElement.blur();
     if(!v){flash("번역을 입력해 주세요.");return}
-    if(await write(()=>S.sb.from("session_versions").upsert({session_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 저장했어요.")){clear(["v-"+id]);S.verEdit.delete(id);render()}
+    if(await write(()=>S.sb.from("session_versions").upsert({session_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 저장했어요.")){clear(["v-"+id]);S.editing.delete("ver:"+id);render()}
   }else if(a==="save-field"){
-    const k=b.dataset.k,v=(document.getElementById(k+"-"+id)||{}).value||"";
-    if(await write(()=>S.sb.from("sessions").update({[k]:v}).eq("id",id),"저장했어요."))clear([k+"-"+id]);
+    const k=b.dataset.k,v=((document.getElementById(k+"-"+id)||{}).value||"").trim();
+    if(!v){flash("내용을 입력해 주세요.");return}
+    document.activeElement&&document.activeElement.blur();
+    if(await write(()=>S.sb.from("sessions").update({[k]:v}).eq("id",id),"저장했어요.")){clear([k+"-"+id]);S.editing.delete("f:"+k+":"+id);render()}
   }
 });
 document.addEventListener("submit",e=>{e.preventDefault();if(e.target.dataset.form==="auth")authSubmit(e.target);else onSubmit(e.target)});
