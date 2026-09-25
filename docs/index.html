@@ -251,6 +251,12 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
 .ver-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .ver-head .f{font-size:12px;color:var(--muted);font-weight:500}
 .saved-tag{color:var(--ok);font-weight:700;font-size:12px}
+.prow{border-radius:12px}
+.prow.open{background:var(--sunk);padding-bottom:12px}
+.ptoggle{flex:1;min-width:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;text-align:left;background:none;border:0;padding:8px 10px;border-radius:10px;cursor:pointer;color:inherit;font:inherit}
+.ptoggle:hover{background:var(--sunk)}
+.ptoggle .ps{flex:1 1 240px;font-size:14px}
+.pback{padding:4px 12px 0;display:grid;gap:10px}
 .cnote{border-left:3px solid var(--en);background:var(--en-soft);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
 .cnote b{display:block;font-size:12px;color:var(--en);margin-bottom:2px}
 .login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px;display:grid;gap:16px}
@@ -309,7 +315,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -596,23 +602,36 @@ function commentBlock(type,id){
 /* ---------- today's sentence ---------- */
 const seoulToday=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Seoul"});
 function fmtDay(d){const [y,m,dd]=String(d).split("-");return y+". "+(+m)+". "+(+dd)+"."}
+// 뜻·설명·어려운 단어·출처 용어 (오늘 카드와 지난 문장이 같이 쓴다)
+function dailyBack(d){
+  const term=S.terms.find(t=>t.id===d.term_id);
+  const words=Array.isArray(d.words)?d.words:[];
+  return '<p class="meaning">'+esc(d.translation||"번역이 아직 없어요.")+'</p>'+
+    (d.explanation?'<p class="dexp">'+esc(d.explanation)+'</p>':"")+
+    (words.length?'<p class="sub" style="margin:0">어려운 단어</p><dl class="dwords">'+words.map(w=>'<dt lang="en">'+esc(w.word)+'</dt><dd>'+esc(w.meaning)+(w.note?' · '+esc(w.note):"")+'</dd>').join("")+'</dl>':"")+
+    (term?'<p class="note">출처 용어: <button class="link" data-action="goto-term" data-id="'+esc(term.id)+'">'+esc(term.word)+'</button></p>':"");
+}
 function vDaily(){
   const d=S.daily;
   if(!d)return '<div class="empty">'+esc(S.dailyErr||"오늘의 문장을 불러오는 중…")+'</div>';
-  const term=S.terms.find(t=>t.id===d.term_id);
-  const words=Array.isArray(d.words)?d.words:[];
   let h='<article class="daily"><p class="dday">'+fmtDay(d.day)+' · TODAY\'S SENTENCE</p><p class="dsent" lang="en">'+esc(d.sentence)+'</p>';
   if(!S.dailyOpen)h+='<button class="reveal" data-action="daily-open">뜻과 설명 보기</button>';
-  else{
-    h+='<div class="back"><p class="meaning">'+esc(d.translation||"번역이 아직 없어요.")+'</p>'+
-      (d.explanation?'<p class="dexp">'+esc(d.explanation)+'</p>':"")+
-      (words.length?'<p class="sub" style="margin:0">어려운 단어</p><dl class="dwords">'+words.map(w=>'<dt lang="en">'+esc(w.word)+'</dt><dd>'+esc(w.meaning)+(w.note?' · '+esc(w.note):"")+'</dd>').join("")+'</dl>':"")+
-      (term?'<p class="note">출처 용어: <button class="link" data-action="goto-term" data-id="'+esc(term.id)+'">'+esc(term.word)+'</button></p>':"")+
-      '<div><button class="link" data-action="daily-close">접기</button></div></div>';
-  }
+  else h+='<div class="back">'+dailyBack(d)+'<div><button class="link" data-action="daily-close">접기</button></div></div>';
   h+='<div class="social">'+starBtn("daily",d.day)+commentBlock("daily",d.day)+'</div></article>';
-  if(S.dailyPast.length)h+='<details class="add" data-key="daily-past"'+(S.open.has("daily-past")?" open":"")+'><summary>지난 문장</summary><div class="past">'+
-    S.dailyPast.map(p=>'<div class="row"><span class="sdate">'+fmtDay(p.day)+'</span><p lang="en">'+esc(p.sentence)+'</p>'+starBtn("daily",p.day)+'</div>').join("")+'</div></details>';
+  if(S.dailyPast.length){
+    const stars=S.dailyPast.filter(p=>isFav("daily",p.day));
+    const list=S.pastFilter==="fav"?stars:S.dailyPast,shown=list.slice(0,S.pastLimit);
+    const ncmt=day=>S.comments.filter(c=>c.target_type==="daily"&&c.target_id===day).length;
+    h+='<details class="add" data-key="daily-past"'+(S.open.has("daily-past")?" open":"")+'><summary>지난 문장 '+S.dailyPast.length+'개</summary><div class="past">'+
+      '<div class="seg" role="group" aria-label="지난 문장 보기" style="justify-self:start">'+[["all","전체"],["fav","★ "+stars.length]].map(([k,l])=>'<button data-action="past-filter" data-v="'+k+'" aria-pressed="'+(S.pastFilter===k)+'">'+l+'</button>').join("")+'</div>'+
+      (shown.length?shown.map(p=>{
+        const k="past:"+p.day,open=S.open.has(k),n=ncmt(p.day);
+        return '<div class="prow'+(open?" open":"")+'"><div class="row"><button class="ptoggle" data-action="past-toggle" data-k="'+esc(k)+'" aria-expanded="'+open+'"><span class="sdate">'+fmtDay(p.day)+'</span><span class="ps" lang="en">'+esc(p.sentence)+'</span>'+(n?'<span class="chip">코멘트 '+n+'</span>':"")+'</button>'+starBtn("daily",p.day)+'</div>'+
+          (open?'<div class="pback back">'+dailyBack(p)+'<div class="social">'+commentBlock("daily",p.day)+'</div></div>':"")+'</div>';
+      }).join(""):'<p class="note" style="margin:0">별 표시한 문장이 없어요.</p>')+
+      (list.length>shown.length?'<button class="btn small" data-action="past-more" style="justify-self:start">더 보기 ('+(list.length-shown.length)+'개 남음)</button>':"")+
+      '</div></details>';
+  }
   return h;
 }
 
@@ -862,6 +881,9 @@ document.addEventListener("click",async e=>{
     document.activeElement&&document.activeElement.blur();
     if(await write(()=>S.sb.from("drill_answers").upsert({drill_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 제출했어요.")){clear(["da-"+id]);S.editing.delete("d:"+id);render()}
   }
+  else if(a==="past-toggle"){const k=b.dataset.k;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
+  else if(a==="past-filter"){S.pastFilter=b.dataset.v;S.pastLimit=20;render()}
+  else if(a==="past-more"){S.pastLimit+=20;render()}
   else if(a==="daily-open"){S.dailyOpen=true;render()}
   else if(a==="daily-close"){S.dailyOpen=false;render()}
   else if(a==="goto-term"){const t=S.terms.find(x=>x.id===id);if(t){S.f={q:t.word,lang:"all",reg:"all",dom:"all"};S.shown.add(t.id);setTab("terms")}}
@@ -1004,9 +1026,9 @@ const loaders={
       S.daily=data&&data.day?data:null;S.dailyOpen=false;
       if(!S.daily)S.dailyErr="영어 예문이 있는 용어가 없어서 오늘의 문장을 고를 수 없어요.";
     }
-    const {data:rows}=await S.sb.from("daily_sentences").select("*").order("day",{ascending:false}).limit(8);
+    const {data:rows}=await S.sb.from("daily_sentences").select("*").order("day",{ascending:false}).limit(1000);
     const cur=(rows||[]).find(x=>S.daily&&x.day===S.daily.day);if(cur)S.daily=cur;
-    S.dailyPast=(rows||[]).filter(x=>!S.daily||x.day!==S.daily.day).slice(0,7);
+    S.dailyPast=(rows||[]).filter(x=>!S.daily||x.day!==S.daily.day);
   },
   async drills(){
     const [a,b,c,d]=await Promise.all([S.sb.from("drills").select("*"),S.sb.from("drill_answers").select("*"),S.sb.from("drill_models").select("*"),S.sb.rpc("drill_status")]);
