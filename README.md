@@ -191,3 +191,16 @@ flowchart LR
   - dr-t4: Do you take card? → Do you take cards? 단수형은 영국·호주 구어라는 설명을 추가했고, 대안 Is card okay?는 Can I pay by card?로 바꿨어요.
   - dr-t5: 공항에서 쓰는 실제 명칭(baggage service office)과 carousel 표현으로 다듬었어요.
   - dr-t6 대안: tomorrow's morning tour → tomorrow morning's tour (소유격 위치 오류).
+
+### 2026-09-25 · 탭별 주소, 새 디자인(폰트·색)
+- 탭별 주소: 탭마다 `#daily`, `#drills`, `#review`, `#terms`, `#sessions`, `#taglines` 주소가 생겼어요.
+  - 뒤로/앞으로 가기, 북마크, 링크 공유가 돼요.
+  - 로그인 직후 주소에 남던 `#`나 인증 토큰은 현재 탭 주소로 정리해요.
+- 폰트: IBM Plex Sans KR과 Noto Serif KR을 **Pretendard Variable**(본문·UI)과 **Bricolage Grotesque**(영어 문장·제목)로 바꿨어요. 작은 날짜 라벨에는 JetBrains Mono를 써요.
+- 색·모양
+  - 강조색을 선명한 파랑(#3E63DD)과 빨강(#E5484D)으로 바꿨어요.
+  - 활성 탭과 주요 버튼을 파랑 알약 모양으로 바꾸고, 카드에 부드러운 그림자와 큰 라운드를 줬어요.
+  - 통계는 칩 형태로 바꿨어요.
+  - 오늘의 문장 카드에 은은한 그라데이션을 넣고 문장을 크게 키웠어요.
+  - 다크 모드 팔레트도 함께 맞췄어요.
+- 확인: 가짜 데이터 사본으로 데스크톱(1100px) 오늘의 문장·번역 연습, 모바일(390px) 다크 모드를 캡처해서 확인했어요. 런타임 오류는 0건이었어요.
