@@ -55,6 +55,7 @@ flowchart LR
      ('나의 이메일', '이름'), ('친구 이메일', '이름');
    ```
 3. Authentication → URL Configuration에서 Site URL과 Redirect URL에 배포 주소를 넣어요.
+   Authentication → Hooks → **Before User Created**에 Postgres 함수 `public.hook_before_user_created`를 연결해요. 이렇게 하면 `members`에 있는 이메일만 가입할 수 있어요.
 4. `docs/config.js`에 프로젝트 URL과 anon key를 넣어요.
 5. Vercel에서 이 저장소를 Import하고 Root Directory를 `docs`, Framework Preset을 `Other`로 두면(빌드 명령 없음) main에 push할 때마다 자동으로 배포돼요.
 
@@ -146,3 +147,15 @@ flowchart LR
   - 둘 다 제출: 서로의 답과 추천 표현이 모두 보여요.
   - 멤버가 아닌 계정: 모든 테이블이 0건이에요.
 - 알려진 한계: 상대가 제출한 사실은 realtime으로 오지 않아요(블라인드라 그 행이 안 보이기 때문). 내가 무언가 저장하거나 새로고침하면 상태 칩이 갱신돼요.
+
+### 2026-09-25 · 로그인을 이메일·비밀번호로 변경, 가입 허용 목록
+- 요청: 로그인 링크 대신 회원가입과 비밀번호 로그인으로 바꾸고, 로그인 정보를 브라우저에 저장할 수 있게. 가입은 두 사람만.
+- 화면: 로그인, 회원가입(비밀번호 확인 포함), 비밀번호 재설정(메일 링크 → 새 비밀번호)을 만들었어요.
+  - 입력칸에 `autocomplete`(username / current-password / new-password)를 달아 브라우저가 비밀번호 저장을 제안해요.
+  - 로그인 상태는 supabase-js가 브라우저에 보관해서, 로그아웃하기 전까지 유지돼요.
+- 마이그레이션 `20260925040000_signup_allowlist.sql`: `hook_before_user_created(event)`
+  - `members`에 없는 이메일이면 403 메시지로 가입을 거부해요.
+  - `supabase_auth_admin`만 실행할 수 있어요.
+  - SQL로 직접 호출해 멤버 이메일은 통과(`{}`)하고 다른 이메일은 거부되는 것을 확인했어요.
+- 대시보드에서 훅을 연결해야 실제 가입에 적용돼요(Authentication → Hooks → Before User Created).
+  - 연결 전이라도 멤버가 아닌 계정은 RLS 때문에 데이터를 볼 수 없어요.
