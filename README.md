@@ -9,6 +9,8 @@
 - **세션 기록**: 원문을 올리고 각자 번역한 뒤 합의안과 메모를 함께 적어요.
 - **태그라인 보드**: 친구가 올린 영어 태그라인에 코멘트로 피드백해요.
 
+배포 주소: https://root-register.vercel.app
+
 커리큘럼 문서: https://claude.ai/code/artifact/1c3f2a9e-ef9a-4133-a30c-5a58af927c16
 
 ## 구조
@@ -82,3 +84,9 @@ flowchart LR
 - GitHub Actions 워크플로 대신 main 브랜치의 `/docs` 폴더를 Pages로 배포하게 바꿨어요. 로그인 토큰에 workflow 권한이 없어서 워크플로 파일을 push할 수 없었어요.
 - GitHub 무료 플랜에서는 비공개 저장소에 Pages를 켤 수 없어서(HTTP 422) 호스팅을 Vercel로 바꿨어요. 저장소는 Private로 유지해요.
 - Supabase 프로젝트는 claude.ai Supabase 커넥터로 만들기로 했어요.
+
+### 2026-09-25 · Vercel 배포
+- Vercel CLI로 로그인한 뒤 `root-register` 프로젝트를 만들었어요. Root Directory는 `docs`, Framework는 없음으로 설정했어요.
+- 첫 프로덕션 배포를 했어요: https://root-register.vercel.app
+- 아직 Supabase를 연결하지 않아서, 사이트는 열리지만 설정 안내 화면이 보여요.
+- `vercel git connect`는 실패했어요. Vercel GitHub 앱이 이 비공개 저장소에 접근할 권한이 없어서예요. 권한을 주기 전까지는 `npx vercel deploy --prod`로 직접 배포해요.
