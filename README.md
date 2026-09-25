@@ -14,7 +14,7 @@
 ## 구조
 
 ```
-docs/                    정적 사이트 (GitHub Pages가 main 브랜치의 /docs를 배포)
+docs/                    정적 사이트 (Vercel이 main 브랜치의 docs/를 배포)
   index.html             앱 전체 (바닐라 JS, supabase-js UMD)
   config.js              Supabase URL + anon key (공개용 키)
 supabase/
@@ -55,7 +55,8 @@ flowchart LR
    supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
    supabase functions deploy examples
    ```
-5. `docs/config.js`에 프로젝트 URL과 anon key를 넣고 main에 push하면 GitHub Pages로 배포돼요. Pages 설정은 main 브랜치의 `/docs` 폴더예요.
+5. `docs/config.js`에 프로젝트 URL과 anon key를 넣어요.
+6. Vercel에서 이 저장소를 Import하고 Root Directory를 `docs`, Framework Preset을 `Other`로 두면(빌드 명령 없음) main에 push할 때마다 자동으로 배포돼요.
 
 예문 생성에는 `claude-opus-5`를 effort `low`로 써요. 거절 응답이 나오면 서버 측 `fallbacks: "default"`가 다른 모델로 한 번 더 시도해요. 호출할 때마다 API 요금이 나와요.
 
@@ -79,3 +80,5 @@ flowchart LR
   - 예문 생성은 Edge Function `examples`가 맡아요. Claude API 키는 서버 secret에만 저장해요.
 - artifact DB 데이터(용어 13개, 어근 짝 8개, 세션 2개)를 내보내서 `seed.sql`로 옮겼어요.
 - GitHub Actions 워크플로 대신 main 브랜치의 `/docs` 폴더를 Pages로 배포하게 바꿨어요. 로그인 토큰에 workflow 권한이 없어서 워크플로 파일을 push할 수 없었어요.
+- GitHub 무료 플랜에서는 비공개 저장소에 Pages를 켤 수 없어서(HTTP 422) 호스팅을 Vercel로 바꿨어요. 저장소는 Private로 유지해요.
+- Supabase 프로젝트는 claude.ai Supabase 커넥터로 만들기로 했어요.
