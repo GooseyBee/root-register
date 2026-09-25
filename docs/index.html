@@ -257,6 +257,14 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
 .ptoggle:hover{background:var(--sunk)}
 .ptoggle .ps{flex:1 1 240px;font-size:14px}
 .pback{padding:4px 12px 0;display:grid;gap:10px}
+.cfm{border:0;border-radius:18px;padding:22px 22px 18px;width:min(380px,calc(100vw - 32px));background:var(--surface);color:var(--ink);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.cfm::backdrop{background:rgba(10,12,16,.45)}
+.cfm-title{margin:0 0 6px;font:700 17px/1.45 var(--sans);overflow-wrap:anywhere}
+.cfm-what{margin:0 0 6px;font-weight:600;overflow-wrap:anywhere}
+.cfm .note{margin:0 0 18px}
+.cfm-actions{display:flex;justify-content:flex-end;gap:8px}
+.cfm-ok{background:var(--bad);border-color:var(--bad);color:#fff}
+.del-link{color:var(--bad)!important}
 .cnote{border-left:3px solid var(--en);background:var(--en-soft);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
 .cnote b{display:block;font-size:12px;color:var(--en);margin-bottom:2px}
 .login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px;display:grid;gap:16px}
@@ -293,6 +301,12 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
     <button role="tab" data-tab="requests" class="tab-meta" title="앱을 이렇게 바꿔 주세요: 개선 요청 게시판">건의함<span class="tab-badge" id="req-badge" hidden></span></button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
+  <dialog id="cfm" class="cfm" aria-labelledby="cfm-title">
+    <p id="cfm-title" class="cfm-title"></p>
+    <p id="cfm-what" class="cfm-what"></p>
+    <p id="cfm-body" class="note"></p>
+    <div class="cfm-actions"><button type="button" class="btn" id="cfm-cancel">취소</button><button type="button" class="btn cfm-ok" id="cfm-ok">삭제</button></div>
+  </dialog>
 </div>
 
 <script>
@@ -457,7 +471,7 @@ function vTerms(){
     return '<div class="term"><div class="hd"><span class="w '+(t.lang==="ko"?"ko":"")+'">'+esc(t.word)+'</span>'+(pairOk?'<span class="pair">← '+esc(t.pair)+'</span>':"")+'</div>'+
       (hide?"":'<div>'+esc(t.meaning)+'</div>')+exList(t,"small",hide)+(tog?'<div>'+tog+'</div>':"")+
       '<div class="meta">'+langChip(t.lang)+'<span class="chip">'+esc(t.register)+'</span><span class="chip">'+esc(t.domain)+'</span>'+whoHTML(t.addedBy)+
-      (S.canWrite?(S.confirm===t.id?' <button class="btn small danger" data-action="del" data-col="terms" data-id="'+esc(t.id)+'">삭제 확인</button> <button class="link" data-action="cancel">취소</button>':' <button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+
+      (S.canWrite?(' '+askDel("삭제",{do:"del",col:"terms",id:t.id,what:"용어 ‘"+t.word+"’"})):"")+
       '</div><div class="social">'+starBtn("term",t.id)+commentBlock("term",t.id)+'</div></div>'}).join("")+'</div>';
 }
 function addTermForm(){
@@ -500,7 +514,7 @@ function vSessions(){
       '</div></div>'+
       field(s,"final","합의안","모임에서 함께 다듬은 최종 번역")+field(s,"notes","메모","발견한 표현, Grammar Clinic 포인트, 다음 과제")+
       '<div class="social">'+commentBlock("session",s.id)+'</div>'+
-      (S.canWrite?'<div class="row-actions">'+(S.confirm===s.id?'<button class="btn small danger" data-action="del" data-col="sessions" data-id="'+esc(s.id)+'">원문 삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(s.id)+'">원문 삭제</button>')+'</div>':"")+
+      (S.canWrite?'<div class="row-actions">'+askDel("원문 삭제",{do:"del",col:"sessions",id:s.id,what:"원문 ‘"+s.title+"’",extra:"두 사람의 번역, 합의안, 메모도 함께 지워져요."})+'</div>':"")+
       '</div></details>'}).join("");
 }
 // 제출칸 공통: 저장 전에는 입력칸, 저장 후에는 잠긴 읽기 전용 + 수정 버튼(수정 중에는 저장·취소).
@@ -548,7 +562,7 @@ function copyItem(t){
     '<div class="row-actions"><button class="btn small primary" data-action="copy-save" data-id="'+esc(t.id)+'">저장</button><button class="link" data-action="lk-cancel" data-k="c:'+esc(t.id)+'" data-ta="ce-'+esc(t.id)+'">취소</button></div></div>';
   return '<div class="copy'+(mine?" mine":"")+'"><p class="t" lang="en">'+esc(t.text)+'</p>'+(t.brief&&!t.brief_id?'<p class="note" style="margin:0">'+esc(t.brief)+'</p>':"")+
     '<div class="social">'+whoHTML(t.addedBy)+starBtn("tagline",t.id)+commentBlock("tagline",t.id)+
-    (mine&&S.canWrite?(S.confirm===t.id?'<button class="link" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="lk-edit" data-k="c:'+esc(t.id)+'" data-ta="ce-'+esc(t.id)+'">수정</button><button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div></div>';
+    (mine&&S.canWrite?('<button class="link" data-action="lk-edit" data-k="c:'+esc(t.id)+'" data-ta="ce-'+esc(t.id)+'">수정</button>'+askDel("삭제",{do:"del",col:"taglines",id:t.id,what:"카피 ‘"+t.text+"’"})):"")+'</div></div>';
 }
 function briefCard(b){
   const members=Object.keys(S.names);
@@ -600,7 +614,7 @@ function commentBlock(type,id){
   let h='<button class="link" data-action="cmt-toggle" data-k="'+esc(k)+'">코멘트 '+cs.length+(open?" · 접기":"")+'</button>';
   if(!open)return h;
   if(cs.length)h+='<div class="cmts">'+cs.map(c=>'<div class="cmt">'+whoHTML(c.author)+'<p>'+esc(c.body)+'</p>'+
-    (c.author===S.uid?(S.confirm===c.id?'<button class="link" data-action="cmt-del" data-id="'+esc(c.id)+'">삭제 확인</button> <button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(c.id)+'">삭제</button>'):"")+'</div>').join("")+'</div>';
+    (c.author===S.uid?(askDel("삭제",{do:"del",col:"comments",id:c.id,what:"이 코멘트"})):"")+'</div>').join("")+'</div>';
   if(S.canWrite){const iid="c-"+type+"-"+id;h+='<form class="cmt-form" data-form="comment" data-type="'+type+'" data-id="'+esc(id)+'"><input type="text" id="'+esc(iid)+'" placeholder="코멘트 남기기" aria-label="코멘트"><button class="btn small" type="submit">남기기</button></form>'}
   return h;
 }
@@ -751,7 +765,7 @@ function vRequests(){
     }
     if(r.claude_note)c+='<div class="cnote"><b>Claude 처리 메모</b>'+esc(r.claude_note)+'</div>';
     c+='<div class="social">'+starBtn("request",r.id)+commentBlock("request",r.id)+
-      (mine&&!editing?(S.confirm===r.id?'<button class="link" data-action="del" data-col="requests" data-id="'+esc(r.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="req-edit" data-id="'+esc(r.id)+'">수정</button><button class="link" data-action="ask" data-id="'+esc(r.id)+'">삭제</button>'):"")+
+      (mine&&!editing?('<button class="link" data-action="req-edit" data-id="'+esc(r.id)+'">수정</button>'+askDel("삭제",{do:"del",col:"requests",id:r.id,what:"건의 ‘"+r.title+"’",extra:"달린 코멘트는 목록에서 보이지 않게 돼요."})):"")+
       '</div></article>';
     return c;
   }).join("");
@@ -778,7 +792,7 @@ function vNames(){
     return '<article class="card nc'+(both?" both":"")+'"><p class="nm">'+esc(c.name)+'</p>'+(c.gloss?'<p class="gl">'+esc(c.gloss)+'</p>':"")+(c.why?'<p class="why">'+esc(c.why)+'</p>':"")+
       (c.added_by?'<p class="note" style="margin:0">'+esc(nm(c.added_by))+' 제안</p>':"")+
       '<div class="acts"><button class="btn small vote" data-action="nvote" data-id="'+esc(c.id)+'" aria-pressed="'+mine+'">'+(mine?"♥ 좋아요":"♡ 좋아요")+(v.length?" "+v.length:"")+'</button>'+
-      (S.confirm===c.id?'<button class="btn small danger" data-action="nexclude" data-id="'+esc(c.id)+'">빼기 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(c.id)+'">빼기</button>')+
+      askDel("빼기",{do:"nexclude",id:c.id,what:"후보 ‘"+c.name+"’",verb:"뺄까요?",ok:"빼기",extra:"두 사람 모두의 목록에서 빠져요. 빠진 후보에서 되살릴 수 있어요."})+
       '</div></article>';
   }).join("")+'</div>';
   if(!active.length)h+='<div class="empty">보이는 후보가 없어요. 다시 추천하기를 눌러 주세요.</div>';
@@ -794,6 +808,33 @@ function vNames(){
     out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b> <span class="note">· '+esc(subj(c.excluded_by||"",nm))+' 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
   return h;
 }
+
+/* ---------- 삭제 확인 팝업 ---------- */
+// 삭제(되돌릴 수 없는 동작) 버튼. 누르면 확인 팝업이 뜨고, 확인해야 실행된다.
+function askDel(label,o){
+  return '<button class="link del-link" data-action="confirm" data-o="'+esc(JSON.stringify(o))+'">'+label+'</button>';
+}
+let pendingDel=null;
+function openConfirm(o){
+  pendingDel=o;
+  const d=$("#cfm");
+  $("#cfm-title").textContent="정말 "+(o.verb||"삭제할까요?");
+  $("#cfm-what").textContent=o.what||"";
+  $("#cfm-body").textContent=(o.extra?o.extra+" ":"")+(o.do==="del"?"삭제하면 되돌릴 수 없어요.":"");
+  $("#cfm-ok").textContent=o.ok||"삭제";
+  if(d.showModal)d.showModal();else d.setAttribute("open","");
+  $("#cfm-cancel").focus();
+}
+function closeConfirm(){const d=$("#cfm");if(d.close)d.close();else d.removeAttribute("open");pendingDel=null}
+async function runConfirmed(o){
+  if(o.do==="del")await write(()=>S.sb.from(o.col).delete().eq("id",o.id),o.col==="comments"?"코멘트를 지웠어요.":"삭제했어요.");
+  else if(o.do==="nexclude")await write(()=>S.sb.from("name_candidates").update({excluded:true,excluded_by:S.uid,excluded_at:new Date().toISOString()}).eq("id",o.id),"후보를 뺐어요. 빠진 후보에서 되살릴 수 있어요.");
+}
+document.addEventListener("click",async e=>{
+  if(e.target.closest("#cfm-cancel")){closeConfirm();return}
+  if(e.target.closest("#cfm-ok")){const o=pendingDel;closeConfirm();if(o)await runConfirmed(o);return}
+  if(e.target.id==="cfm")closeConfirm(); // 바깥(배경) 클릭
+});
 
 /* ---------- writes ---------- */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():""}
@@ -897,7 +938,7 @@ document.addEventListener("click",async e=>{
   else if(a==="goto-term"){const t=S.terms.find(x=>x.id===id);if(t){S.f={q:t.word,lang:"all",reg:"all",dom:"all"};S.shown.add(t.id);setTab("terms")}}
   else if(a==="grade")grade(id,b.dataset.g);
   else if(a==="rlang"){S.reviewLang=b.dataset.v;S.revealed=false;render()}
-  else if(a==="ask"){S.confirm=id;render()}
+  else if(a==="confirm"){try{openConfirm(JSON.parse(b.dataset.o))}catch(_){}}
   else if(a==="cancel"){S.confirm=null;render()}
   else if(a==="del"){S.confirm=null;await write(()=>S.sb.from(b.dataset.col).delete().eq("id",id),"삭제했어요.")}
   else if(a==="copy-save"){
