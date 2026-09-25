@@ -234,6 +234,17 @@ details.sess>summary::-webkit-details-marker{display:none}
 .rrow .bar{height:10px;border-radius:999px;background:var(--sunk);overflow:hidden}
 .rrow .bar i{display:block;height:100%;background:var(--ko);border-radius:999px}
 .rrow b{font-family:var(--display);font-size:15px}
+.brief-card{display:grid;gap:12px}
+.brief-card h3{margin:0;font:750 20px/1.3 var(--display);letter-spacing:-.01em}
+.brief-card .bspec{display:grid;grid-template-columns:auto 1fr;gap:6px 12px;margin:0;font-size:14px}
+.brief-card .bspec dt{color:var(--muted);font-size:12px;font-weight:600;padding-top:2px}
+.brief-card .bspec dd{margin:0}
+.brief-card .rules{background:var(--ko-soft);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:14px}
+.copies{display:grid;gap:8px}
+.copy{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:6px}
+.copy .t{margin:0;font:650 18px/1.4 var(--display);letter-spacing:-.01em}
+.copy.mine{background:var(--en-soft);border-color:transparent}
+details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
 .cnote{border-left:3px solid var(--en);background:var(--en-soft);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
 .cnote b{display:block;font-size:12px;color:var(--en);margin-bottom:2px}
 .login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px;display:grid;gap:16px}
@@ -266,7 +277,7 @@ details.sess>summary::-webkit-details-marker{display:none}
     <button role="tab" data-tab="review">오늘의 복습</button>
     <button role="tab" data-tab="terms">용어집</button>
     <button role="tab" data-tab="sessions">함께 번역</button>
-    <button role="tab" data-tab="taglines">태그라인 보드</button>
+    <button role="tab" data-tab="taglines">영어 카피 연습</button>
     <button role="tab" data-tab="requests" class="tab-meta" title="앱을 이렇게 바꿔 주세요: 개선 요청 게시판">건의함<span class="tab-badge" id="req-badge" hidden></span></button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
@@ -292,7 +303,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -362,7 +373,7 @@ function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
   const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;
   $("#stats").innerHTML=
-    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>함께 번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
+    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>함께 번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>카피 <b>'+S.taglines.filter(t=>t.addedBy===S.uid).length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
   {const n=S.requests.filter(r=>r.status==="new").length,bd=$("#req-badge");if(bd){bd.textContent=n;bd.hidden=!n;bd.title="새 건의 "+n+"개"}}
 }
@@ -485,20 +496,57 @@ function field(s,k,label,ph){
   return '<div><label class="f">'+label+'<textarea id="'+k+'-'+esc(s.id)+'" placeholder="'+ph+'">'+esc(s[k]||"")+'</textarea></label><div class="row-actions" style="margin-top:6px"><button class="btn small" data-action="save-field" data-k="'+k+'" data-id="'+esc(s.id)+'">저장</button></div></div>';
 }
 
+function vCopyGuide(){
+  return guideBox("guide-copy","영어 카피 연습은 이렇게 써요",
+    '<p>영어 카피(태그라인) 감각을 키우는 곳이에요. 혜림은 영어 버벌 브랜딩을, 희주는 영어권 사람에게 어떻게 들리는지 짚는 연습을 해요.</p>'+
+    '<p class="sub" style="margin:0">진행 순서</p><ol>'+
+      '<li><b>브리프 읽기</b>: 주마다 Claude가 가상 브랜드 브리프를 넣어요. 무엇을, 누구에게, 어떤 톤으로 알릴지와 <b>조건</b>(길이, 쓰면 안 되는 단어 등)이 있어요.</li>'+
+      '<li><b>카피 제출</b>: 조건을 지켜 영어 카피를 1~3개 내요. 한 번에 하나씩 <b>제출</b>을 눌러요.</li>'+
+      '<li><b>비교</b>: 내가 먼저 내야 상대 카피가 보여요(블라인드). 서로 베끼지 않고 각자 생각대로 써 보기 위해서예요.</li>'+
+      '<li><b>피드백</b>: 상대 카피에 코멘트를 달아요. 자연스러운지, 원어민에게 어떤 느낌인지, 조건을 지켰는지, 더 나은 버전은 뭔지요.</li>'+
+      '<li>마음에 드는 카피는 별(★)로 모아 두면 포트폴리오가 돼요.</li>'+
+    '</ol>'+
+    '<p class="tip">좋은 피드백 예) "Zero guilt는 다이어트 광고에서 너무 흔해요. 과일향을 살려 Fruit-forward, not sugar-loaded는 어때요? 조건(6단어)도 지켜요."</p>'+
+    '<p class="note" style="margin:0">브리프 없이 써 보고 싶은 카피는 아래 <b>자유 카피</b>에 올려요. 새 브리프가 필요하면 건의함에 종류를 콘텐츠로 해서 요청해 주세요.</p>');
+}
+function copyItem(t){
+  const mine=t.addedBy===S.uid;
+  return '<div class="copy'+(mine?" mine":"")+'"><p class="t" lang="en">'+esc(t.text)+'</p>'+(t.brief&&!t.brief_id?'<p class="note" style="margin:0">'+esc(t.brief)+'</p>':"")+
+    '<div class="social">'+whoHTML(t.addedBy)+starBtn("tagline",t.id)+commentBlock("tagline",t.id)+
+    (mine&&S.canWrite?(S.confirm===t.id?'<button class="link" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div></div>';
+}
+function briefCard(b){
+  const members=Object.keys(S.names);
+  const nm=m=>m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0];
+  const cnt=m=>{const r=S.copyStatus.find(x=>x.brief_id===b.id&&x.author===m);return r?Number(r.n):0};
+  const mine=S.taglines.filter(t=>t.brief_id===b.id&&t.addedBy===S.uid).sort((x,y)=>x.createdAt-y.createdAt);
+  const others=S.taglines.filter(t=>t.brief_id===b.id&&t.addedBy!==S.uid).sort((x,y)=>x.createdAt-y.createdAt);
+  let c='<article class="card brief-card"><h3>'+esc(b.title)+'</h3><dl class="bspec">'+
+    (b.product?'<dt>무엇을</dt><dd>'+esc(b.product)+'</dd>':"")+(b.target?'<dt>누구에게</dt><dd>'+esc(b.target)+'</dd>':"")+(b.tone?'<dt>톤</dt><dd>'+esc(b.tone)+'</dd>':"")+'</dl>'+
+    (b.rules?'<div class="rules"><b>조건</b> · '+esc(b.rules)+'</div>':"")+
+    '<div class="status">'+members.map(m=>'<span class="chip'+(cnt(m)?" done":"")+'">'+esc(nm(m))+(cnt(m)?" · "+cnt(m)+"개 제출":" · 아직")+'</span>').join("")+'</div>';
+  if(mine.length)c+='<div class="copies">'+mine.map(copyItem).join("")+'</div>';
+  if(S.canWrite&&mine.length<3)c+='<form class="cmt-form" data-form="copy" data-brief="'+esc(b.id)+'"><input type="text" id="cp-'+esc(b.id)+'" lang="en" placeholder="'+(mine.length?"다른 버전 추가 (최대 3개)":"영어 카피를 써 보세요")+'" aria-label="영어 카피"><button class="btn small primary" type="submit">제출</button></form>';
+  if(mine.length)c+=others.length?'<p class="sub" style="margin:0">상대 카피</p><div class="copies">'+others.map(copyItem).join("")+'</div>':'<p class="note" style="margin:0">상대가 아직 내지 않았어요. 내면 여기에 보여요.</p>';
+  else c+='<p class="note" style="margin:0">내 카피를 먼저 내면 상대 카피가 보여요.</p>';
+  return c+'</article>';
+}
 function vTaglines(){
-  let h="";
-  if(S.canWrite)h+='<details class="add" data-key="add-tl"'+(S.open.has("add-tl")?" open":"")+'><summary>태그라인 올리기</summary><form data-form="tagline">'+
-    '<label class="f">태그라인<input type="text" id="g-text" required placeholder="영어 태그라인"></label>'+
-    '<label class="f">브리프 (제품, 타깃, 톤)<input type="text" id="g-brief" placeholder="예: 20대 대상 제로 슈거 탄산수, 경쾌한 톤"></label>'+
+  let h=vCopyGuide();
+  const weeks=[...new Set(S.briefs.map(b=>b.week))].sort().reverse();
+  const byWeek=w=>S.briefs.filter(b=>b.week===w).sort((x,y)=>x.sort-y.sort);
+  if(weeks.length){
+    h+='<p class="sub" style="margin:0">이번 주 브리프 · '+fmtDay(weeks[0])+' 주</p>'+byWeek(weeks[0]).map(briefCard).join("");
+    if(weeks.length>1)h+='<details class="add" data-key="copy-past"'+(S.open.has("copy-past")?" open":"")+'><summary>지난 브리프</summary><div class="panel" style="padding:0 16px 16px">'+weeks.slice(1).map(w=>'<p class="sub" style="margin:0">'+fmtDay(w)+' 주</p>'+byWeek(w).map(briefCard).join("")).join("")+'</div></details>';
+  }else h+='<div class="empty">아직 브리프가 없어요. 건의함에 콘텐츠로 요청해 주세요.</div>';
+  const free=S.taglines.filter(t=>!t.brief_id&&(!S.favOnly.taglines||isFav("tagline",t.id))).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  h+='<div class="rv-top"><p class="sub" style="margin:0">자유 카피</p>'+favOnlyBtn("taglines")+'</div>';
+  if(S.canWrite)h+='<details class="add" data-key="add-tl"'+(S.open.has("add-tl")?" open":"")+'><summary>자유 카피 올리기</summary><form data-form="tagline">'+
+    '<label class="f">카피<input type="text" id="g-text" required lang="en" placeholder="영어 카피"></label>'+
+    '<label class="f">상황 (제품, 타깃, 톤)<input type="text" id="g-brief" placeholder="예: 20대 대상 제로 슈거 탄산수, 경쾌한 톤"></label>'+
     '<div class="row-actions"><button class="btn primary" type="submit">올리기</button></div></form></details>';
-  if(!S.taglines.length)return h+'<div class="empty">아직 올라온 태그라인이 없어요.</div>';
-  h+='<div class="rv-top"><p class="note">'+S.taglines.length+'개 태그라인</p>'+favOnlyBtn("taglines")+'</div>';
-  const list=S.taglines.filter(t=>!S.favOnly.taglines||isFav("tagline",t.id)).slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  return h+list.map(t=>{
-    return '<article class="card tl"><p class="t">'+esc(t.text)+'</p>'+(t.brief?'<p class="brief">'+esc(t.brief)+'</p>':"")+
-      '<div class="row-actions">'+starBtn("tagline",t.id)+whoHTML(t.addedBy)+(S.canWrite?(S.confirm===t.id?'<button class="btn small danger" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div>'+
-      '<div class="social">'+commentBlock("tagline",t.id)+'</div>'+
-      '</article>'}).join("");
+  h+=free.length?'<div class="copies">'+free.map(copyItem).join("")+'</div>':'<p class="note">자유 카피가 아직 없어요.</p>';
+  return h;
 }
 
 /* ---------- favorites & comments ---------- */
@@ -715,6 +763,9 @@ async function onSubmit(form){
     const doc={no:Number(val("s-no"))||1,date:val("s-date")||null,dir:val("s-dir"),level:val("s-lvl")||"보통",title:val("s-title"),source:val("s-src")};
     if(!doc.title||!doc.source)return;
     if(await write(()=>S.sb.from("sessions").insert(doc),"원문을 추가했어요."))clear(["s-no","s-date","s-dir","s-lvl","s-title","s-src"]);
+  }else if(kind==="copy"){
+    const bid=form.dataset.brief,text=val("cp-"+bid);if(!text)return;
+    if(await write(()=>S.sb.from("taglines").insert({text,brief_id:bid}),"카피를 제출했어요."))clear(["cp-"+bid]);
   }else if(kind==="tagline"){
     const text=val("g-text");if(!text)return;
     const doc={text,brief:val("g-brief")};
@@ -897,8 +948,11 @@ const loaders={
     const [a,b]=await Promise.all([S.sb.from("sessions").select("*"),S.sb.from("session_versions").select("*")]);
     if(a.error)throw a.error;if(b.error)throw b.error;
     S.sessions=a.data.map(r=>{const versions={};for(const v of b.data)if(v.session_id===r.id)versions[v.author]=v.body;return {...r,date:r.date||"",versions,createdAt:T(r)}})},
-  async taglines(){const {data,error}=await S.sb.from("taglines").select("*");if(error)throw error;
-    S.taglines=data.map(r=>({...r,addedBy:r.added_by,createdAt:T(r)}))},
+  async taglines(){
+    const [a,b,c]=await Promise.all([S.sb.from("taglines").select("*"),S.sb.from("copy_briefs").select("*"),S.sb.rpc("copy_status")]);
+    for(const r of [a,b,c])if(r.error)throw r.error;
+    S.taglines=a.data.map(r=>({...r,addedBy:r.added_by,createdAt:T(r)}));S.briefs=b.data;S.copyStatus=c.data||[];
+  },
   async comments(){const {data,error}=await S.sb.from("comments").select("*").order("created_at");if(error)throw error;S.comments=data},
   async favorites(){const {data,error}=await S.sb.from("favorites").select("target_type,target_id");if(error)throw error;
     S.favs=new Set(data.map(r=>fkey(r.target_type,r.target_id)))},
@@ -926,7 +980,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
