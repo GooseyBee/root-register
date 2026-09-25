@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
-<script src="config.js"></script>
+<script src="/config.js"></script>
 <style>
 :root{
   --bg:#F5F6FA; --surface:#FFFFFF; --sunk:#EEF0F6; --ink:#15171C; --muted:#626A7A; --line:#E3E6EE;
@@ -252,7 +252,10 @@ const S={
   f:{q:"",lang:"all",reg:"all",dom:"all"},
   names:{},open:new Set(),confirm:null,dirty:new Map(),pending:false,msg:"",shown:new Set(),showAll:false
 };
-if(TABS.includes(location.hash.slice(1)))S.tab=location.hash.slice(1);
+// 주소 경로(/drills 등)로 탭을 고른다. 예전 #drills 링크도 받아 준다.
+const pathTab=()=>{const p=location.pathname.replace(/^\/+|\/+$/g,"");return TABS.includes(p)?p:(p===""?"daily":null)};
+const tabUrl=t=>t==="daily"?"/":"/"+t;
+{const h=location.hash.slice(1),p=pathTab();S.tab=TABS.includes(h)?h:(p||"daily")}
 
 const $=s=>document.querySelector(s);
 const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -673,11 +676,11 @@ document.addEventListener("keydown",e=>{
 function setTab(t){
   if(!TABS.includes(t))return;
   S.tab=t;
-  if(location.hash.slice(1)!==t)history.pushState(null,"","#"+t);
+  if(location.pathname!==tabUrl(t)||location.hash)history.pushState(null,"",tabUrl(t));
   render();window.scrollTo({top:0});
 }
-window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)&&h!==S.tab){S.tab=h;render()}});
-window.addEventListener("popstate",()=>{const h=location.hash.slice(1);S.tab=TABS.includes(h)?h:"daily";render()});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)){history.replaceState(null,"",tabUrl(h));if(h!==S.tab){S.tab=h;render()}}});
+window.addEventListener("popstate",()=>{S.tab=pathTab()||"daily";render()});
 
 /* ---------- auth ---------- */
 const INP='';
@@ -707,7 +710,7 @@ function authError(e){
 }
 async function authSubmit(form){
   const mode=form.dataset.mode,email=val("l-email").toLowerCase(),pw=(document.getElementById("l-pw")||{}).value||"";
-  const back=location.origin+location.pathname;
+  const back=location.origin+"/";
   let r;
   if(mode==="login")r=await S.sb.auth.signInWithPassword({email,password:pw});
   else if(mode==="signup"){
@@ -790,7 +793,7 @@ render();
     if(!(members||[]).some(m=>m.email===S.uid)){S.dbState="notmember";render();return}
     $("#me").innerHTML='<span>'+esc(S.names[S.uid].name)+'</span><button class="link" data-action="logout">로그아웃</button>';
     await reload();S.dbState="ready";
-    if(location.hash.slice(1)!==S.tab)history.replaceState(null,"",location.pathname+location.search+"#"+S.tab);
+    if(location.pathname!==tabUrl(S.tab)||location.hash)history.replaceState(null,"",tabUrl(S.tab)+location.search);
     render();
     const ch=S.sb.channel("rr");
     for(const t of Object.keys(TABLE_TO_LOADER))ch.on("postgres_changes",{event:"*",schema:"public",table:t},()=>reload(TABLE_TO_LOADER[t]));
