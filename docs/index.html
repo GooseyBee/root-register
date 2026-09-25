@@ -546,7 +546,7 @@ async function toggleFav(type,id){
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
   const tb=e.target.closest("#tabs button");
-  if(tb){S.tab=tb.dataset.tab;S.confirm=null;S.revealed=falserender();return}
+  if(tb){S.tab=tb.dataset.tab;S.confirm=null;S.revealed=false;render();return}
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
   if(a==="toggle-term"){S.shown.has(id)?S.shown.delete(id):S.shown.add(id);render()}
