@@ -185,6 +185,17 @@ details.sess>summary::-webkit-details-marker{display:none}
 .model{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .model .best{margin:0;font:650 19px/1.45 var(--display);color:var(--en);letter-spacing:-.01em}
 .model ul{margin:0;padding-left:18px;font-size:14px}
+.req{display:grid;gap:10px}
+.req h3{margin:0;font:700 18px/1.4 var(--sans);letter-spacing:-.01em}
+.req .body{margin:0;white-space:pre-wrap;font-size:15px}
+.req .meta{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:12px;color:var(--muted)}
+.st-new{background:var(--en-soft);color:var(--en)}
+.st-reviewing,.st-planned{background:var(--sunk);color:var(--ink)}
+.st-in_progress{background:color-mix(in srgb,var(--warn) 18%,transparent);color:var(--warn)}
+.st-done{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.st-declined{background:var(--sunk);color:var(--muted)}
+.cnote{border-left:3px solid var(--en);background:var(--en-soft);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
+.cnote b{display:block;font-size:12px;color:var(--en);margin-bottom:2px}
 .login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px;display:grid;gap:16px}
 .login h2{margin:0;font:700 24px var(--display);letter-spacing:-.02em}
 .login .seg{display:grid;grid-template-columns:1fr 1fr;width:100%}
@@ -214,6 +225,7 @@ details.sess>summary::-webkit-details-marker{display:none}
     <button role="tab" data-tab="terms">용어집</button>
     <button role="tab" data-tab="sessions">세션 기록</button>
     <button role="tab" data-tab="taglines">태그라인 보드</button>
+    <button role="tab" data-tab="requests">건의함</button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
 </div>
@@ -224,14 +236,17 @@ details.sess>summary::-webkit-details-marker{display:none}
 const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테크","공문·행정"];
 const REGISTERS=["구어","문어","전문"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
-const TABS=["daily","drills","review","terms","sessions","taglines"];
+const TABS=["daily","drills","review","terms","sessions","taglines","requests"];
+const KINDS=["기능 추가","수정·버그","콘텐츠","디자인","기타"];
+const STATUS={new:"새 건의",reviewing:"검토 중",planned:"예정",in_progress:"작업 중",done:"완료",declined:"보류"};
+const OPEN_ST=["new","reviewing","planned","in_progress"];
 const TOPICS=[["marketing","마케팅·광고"],["business","비즈니스·이메일"],["daily","일상 회화"],["travel","여행 표현"]];
 
 const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
-  favOnly:{terms:false,sessions:false,taglines:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillFilter:"all",cmtOpen:new Set(),
+  favOnly:{terms:false,sessions:false,taglines:false,requests:false},
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -298,7 +313,7 @@ function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
   const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;
   $("#stats").innerHTML=
-    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
+    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
 }
 function render(){
@@ -315,7 +330,7 @@ function render(){
   else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 은(는) 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
   else{
     if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
-    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines})[S.tab]();
+    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests})[S.tab]();
   }
   $("#panel").innerHTML=h;
   for(const [id,v] of S.dirty){const el=document.getElementById(id);if(el)el.value=v}
@@ -513,6 +528,37 @@ function vDrills(){
   }).join("");
 }
 
+/* ---------- requests (건의함) ---------- */
+function vRequests(){
+  let h='';
+  if(S.canWrite)h+='<details class="add" data-key="add-req"'+(S.open.has("add-req")?" open":"")+'><summary>건의 올리기</summary><form data-form="request">'+
+    '<label class="f">제목<input type="text" id="q-title" required placeholder="예: 번역 연습에 난이도 표시가 있으면 좋겠어요"></label>'+
+    '<label class="f">종류<select id="q-kind">'+opt(KINDS,"기능 추가")+'</select></label>'+
+    '<label class="f">내용<textarea id="q-body" placeholder="무엇을, 왜 바꾸고 싶은지 적어 주세요. 예시나 화면 위치가 있으면 더 좋아요."></textarea></label>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">올리기</button><span class="note">올린 건의는 Claude가 확인하고, 반영되면 처리 메모가 달려요.</span></div></form></details>';
+  h+='<div class="rv-top"><div class="seg" role="group" aria-label="상태">'+[["open","진행 중"],["done","완료·보류"],["all","전체"]].map(([k,l])=>'<button data-action="req-filter" data-v="'+k+'" aria-pressed="'+(S.reqFilter===k)+'">'+l+'</button>').join("")+'</div>'+favOnlyBtn("requests")+'</div>';
+  const list=S.requests.filter(r=>(S.reqFilter==="all"||(S.reqFilter==="open"?OPEN_ST.includes(r.status):!OPEN_ST.includes(r.status)))&&(!S.favOnly.requests||isFav("request",r.id)))
+    .sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  if(!list.length)return h+'<div class="empty">'+(S.reqFilter==="open"?"진행 중인 건의가 없어요. 바꾸고 싶은 점이 있으면 올려 주세요.":"표시할 건의가 없어요.")+'</div>';
+  return h+list.map(r=>{
+    const mine=r.author===S.uid,editing=S.reqEdit===r.id;
+    let c='<article class="card req"><div class="meta"><span class="chip st-'+esc(r.status)+'">'+esc(STATUS[r.status]||r.status)+'</span><span class="chip">'+esc(r.kind)+'</span>'+whoHTML(r.author)+'<span class="sdate">'+esc(String(r.created_at).slice(0,10))+'</span></div>';
+    if(editing){
+      c+='<label class="f">제목<input type="text" id="qe-title-'+esc(r.id)+'" value="'+esc(r.title)+'"></label>'+
+        '<label class="f">종류<select id="qe-kind-'+esc(r.id)+'">'+opt(KINDS,r.kind)+'</select></label>'+
+        '<label class="f">내용<textarea id="qe-body-'+esc(r.id)+'">'+esc(r.body)+'</textarea></label>'+
+        '<div class="row-actions"><button class="btn small primary" data-action="req-save" data-id="'+esc(r.id)+'">저장</button><button class="link" data-action="req-edit" data-id="">취소</button></div>';
+    }else{
+      c+='<h3>'+esc(r.title)+'</h3>'+(r.body?'<p class="body">'+esc(r.body)+'</p>':"");
+    }
+    if(r.claude_note)c+='<div class="cnote"><b>Claude 처리 메모</b>'+esc(r.claude_note)+'</div>';
+    c+='<div class="social">'+starBtn("request",r.id)+commentBlock("request",r.id)+
+      (mine&&!editing?(S.confirm===r.id?'<button class="link" data-action="del" data-col="requests" data-id="'+esc(r.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="req-edit" data-id="'+esc(r.id)+'">수정</button><button class="link" data-action="ask" data-id="'+esc(r.id)+'">삭제</button>'):"")+
+      '</div></article>';
+    return c;
+  }).join("");
+}
+
 /* ---------- writes ---------- */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():""}
 function clear(ids){for(const i of ids)S.dirty.delete(i)}
@@ -536,6 +582,9 @@ async function onSubmit(form){
     const text=val("g-text");if(!text)return;
     const doc={text,brief:val("g-brief")};
     if(await write(()=>S.sb.from("taglines").insert(doc),"태그라인을 올렸어요."))clear(["g-text","g-brief"]);
+  }else if(kind==="request"){
+    const title=val("q-title");if(!title)return;
+    if(await write(()=>S.sb.from("requests").insert({title,kind:val("q-kind"),body:val("q-body")}),"건의를 올렸어요. Claude가 확인할 거예요."))clear(["q-title","q-kind","q-body"]);
   }else if(kind==="comment"){
     const type=form.dataset.type,id=form.dataset.id,iid="c-"+type+"-"+id,text=val(iid);if(!text)return;
     if(await write(()=>S.sb.from("comments").insert({target_type:type,target_id:id,body:text})))clear([iid]);
@@ -567,6 +616,12 @@ document.addEventListener("click",async e=>{
   else if(a==="fav-only"){const l=b.dataset.list;S.favOnly[l]=!S.favOnly[l];render()}
   else if(a==="cmt-toggle"){const k=b.dataset.k;S.cmtOpen.has(k)?S.cmtOpen.delete(k):S.cmtOpen.add(k);render()}
   else if(a==="cmt-del"){S.confirm=null;await write(()=>S.sb.from("comments").delete().eq("id",id),"코멘트를 지웠어요.")}
+  else if(a==="req-filter"){S.reqFilter=b.dataset.v;render()}
+  else if(a==="req-edit"){S.reqEdit=id||null;render()}
+  else if(a==="req-save"){
+    const t=val("qe-title-"+id);if(!t){flash("제목을 입력해 주세요.");return}
+    if(await write(()=>S.sb.from("requests").update({title:t,kind:val("qe-kind-"+id),body:val("qe-body-"+id),updated_at:new Date().toISOString()}).eq("id",id),"건의를 수정했어요.")){S.reqEdit=null;clear(["qe-title-"+id,"qe-kind-"+id,"qe-body-"+id]);render()}
+  }
   else if(a==="drill-topic"){S.drillTopic=b.dataset.v;render()}
   else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
   else if(a==="drill-model"){const k="model-"+id;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
@@ -707,10 +762,11 @@ const loaders={
     S.drills=a.data;S.drillAns=b.data;S.drillStatus=d.data||[];
     S.drillModels={};for(const m of c.data)S.drillModels[m.drill_id]=m;
   },
+  async requests(){const {data,error}=await S.sb.from("requests").select("*");if(error)throw error;S.requests=data},
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
