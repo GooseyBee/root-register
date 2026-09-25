@@ -1,0 +1,591 @@
+<title>Root &amp; Register</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@500;700&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.1/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<style>
+:root{
+  --bg:#EEF1EE; --surface:#FAFBF9; --sunk:#E4E9E5; --ink:#1B2220; --muted:#5B6662; --line:#D3D9D5;
+  --ko:#B4322A; --ko-soft:#F5E1DE; --en:#2D4A7A; --en-soft:#DFE6F1;
+  --ok:#2E7D4F; --warn:#9A6210; --bad:#B4322A;
+  --serif:"Noto Serif KR","Nanum Myeongjo","AppleMyungjo",serif;
+  --sans:"IBM Plex Sans KR",-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#131816; --surface:#1B2220; --sunk:#232C29; --ink:#E4EAE7; --muted:#9AA6A1; --line:#2F3935;
+    --ko:#E8736A; --ko-soft:#3A2321; --en:#93ADDC; --en-soft:#1F2A3D;
+    --ok:#62C08A; --warn:#E0A94A; --bad:#E8736A;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#131816; --surface:#1B2220; --sunk:#232C29; --ink:#E4EAE7; --muted:#9AA6A1; --line:#2F3935;
+  --ko:#E8736A; --ko-soft:#3A2321; --en:#93ADDC; --en-soft:#1F2A3D;
+  --ok:#62C08A; --warn:#E0A94A; --bad:#E8736A;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:0 48px}
+.wrap{max-width:880px;margin:0 auto}
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:28px 16px}
+.brand h1{margin:0;font:700 26px/1.2 var(--serif);letter-spacing:-.01em;text-wrap:balance}
+.brand h1 .amp{color:var(--ko)}
+.brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
+.me{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
+.me img{width:26px;height:26px;border-radius:50%}
+.stats{display:flex;flex-wrap:wrap;gap:6px 18px;font:500 12px/1.4 var(--mono);color:var(--muted);letter-spacing:.02em;padding-bottom:14px;border-bottom:1px solid var(--line)}
+.stats b{color:var(--ink);font-weight:500;font-variant-numeric:tabular-nums}
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:4px;overflow-x:auto;padding-block:10px;margin-bottom:14px;scrollbar-width:none}
+nav.tabs button{flex:0 0 auto;border:1px solid transparent;background:none;color:var(--muted);font:500 14px var(--sans);padding:7px 14px;border-radius:999px;cursor:pointer}
+nav.tabs button[aria-selected="true"]{background:var(--ink);color:var(--bg)}
+nav.tabs button:hover:not([aria-selected="true"]){border-color:var(--line);color:var(--ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--en);outline-offset:2px}
+.btn{border:1px solid var(--line);background:var(--surface);padding:7px 14px;border-radius:8px;cursor:pointer;font-weight:500;font-size:14px}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.danger{color:var(--bad);border-color:var(--bad)}
+.btn.small{padding:4px 10px;font-size:13px}
+.link{background:none;border:0;padding:0;color:var(--muted);cursor:pointer;font-size:13px;text-decoration:underline;text-underline-offset:3px}
+.panel{display:grid;gap:14px}
+.note{font-size:13px;color:var(--muted);margin:0}
+.banner{padding:10px 14px;border-radius:var(--r);background:var(--sunk);font-size:13px}
+.chip{display:inline-block;font:500 11px/1 var(--mono);letter-spacing:.04em;padding:4px 7px;border-radius:5px;background:var(--sunk);color:var(--muted);white-space:nowrap}
+.chip.ko{background:var(--ko-soft);color:var(--ko)}
+.chip.en{background:var(--en-soft);color:var(--en)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+label.f{display:grid;gap:4px;font-size:12px;color:var(--muted);font-weight:500}
+input[type=text],input[type=date],input[type=number],input[type=search],select,textarea{width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;font-size:15px;color:var(--ink)}
+textarea{min-height:84px;resize:vertical;line-height:1.55}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+details.add{background:var(--surface);border:1px dashed var(--line);border-radius:var(--r)}
+details.add>summary{cursor:pointer;padding:12px 16px;font-weight:600;font-size:14px;list-style:none}
+details.add>summary::-webkit-details-marker{display:none}
+details.add>summary::before{content:"+ ";color:var(--ko)}
+details.add[open]>summary::before{content:"– "}
+details.add form{display:grid;gap:10px;padding:0 16px 16px}
+.row-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:14px}
+.ko-word{font-family:var(--serif)}
+
+/* review */
+.rv-top{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 12px;font-size:13px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.flash{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 22px;display:grid;gap:16px;min-height:280px;align-content:start}
+.flash .word{font-size:clamp(28px,7vw,40px);line-height:1.25;font-weight:700;margin:0;text-wrap:balance;overflow-wrap:anywhere}
+.flash .word.en{font-family:var(--sans);font-weight:600;color:var(--en)}
+.flash .word.ko{font-family:var(--serif);color:var(--ko)}
+.flash .back{display:grid;gap:10px;border-top:1px solid var(--line);padding-top:16px}
+.exs{margin:0;padding:0;list-style:none;display:grid;gap:10px;counter-reset:ex}
+.exs li{display:grid;gap:1px;padding-left:26px;position:relative;counter-increment:ex}
+.exs li::before{content:counter(ex);position:absolute;left:0;top:2px;font:500 11px/18px var(--mono);width:18px;text-align:center;border-radius:50%;background:var(--sunk);color:var(--muted)}
+.exs .s{font-size:15px}
+.exs .s mark{background:none;color:inherit;font-weight:600;text-decoration:underline;text-decoration-color:var(--ko);text-underline-offset:3px}
+.exs .t{font-size:13px;color:var(--muted)}
+.exs.small .s{font-size:14px}
+.ex-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.flash .meaning{font-size:18px;margin:0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:14px;margin:0}
+.kv dt{color:var(--muted);font-size:12px;padding-top:2px}
+.kv dd{margin:0}
+.grade{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grade button{padding:12px 6px;border-radius:10px;border:1px solid var(--line);background:var(--surface);cursor:pointer;font-weight:600;display:grid;gap:2px}
+.grade button small{font:400 11px var(--mono);color:var(--muted)}
+.grade .g-again{color:var(--bad)} .grade .g-hard{color:var(--warn)} .grade .g-good{color:var(--ok)}
+.reveal{width:100%;padding:14px;border-radius:10px;border:1px dashed var(--muted);background:none;cursor:pointer;font-weight:600;color:var(--muted)}
+.boxes{display:flex;gap:6px;font:12px var(--mono);color:var(--muted);flex-wrap:wrap}
+.boxes span b{color:var(--ink);font-weight:500}
+
+/* glossary */
+.filters{display:grid;gap:8px}
+.filters .sel{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.terms{display:grid;gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+.term{display:grid;gap:4px;padding:12px 16px;border-top:1px solid var(--line)}
+.term:first-child{border-top:0}
+.term .hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 10px}
+.term .w{font-size:18px;font-weight:600}
+.term .w.ko{font-family:var(--serif);font-weight:700}
+.term .pair{color:var(--muted);font-size:14px}
+.term .ex{font-size:14px;color:var(--muted);margin:0;font-style:italic}
+.term .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px;color:var(--muted)}
+
+/* roots */
+.roots{display:grid;gap:12px}
+.rpair{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);display:grid;grid-template-columns:1fr 1fr;overflow:hidden}
+.rside{padding:16px;display:grid;gap:6px;align-content:start}
+.rside+.rside{border-left:1px solid var(--line)}
+.rside.en{background:linear-gradient(var(--en-soft),transparent 70%)}
+.rside.ko{background:linear-gradient(var(--ko-soft),transparent 70%)}
+.rroot{font:italic 600 24px/1.2 var(--sans);color:var(--en);margin:0}
+.rhan{font:700 40px/1 var(--serif);color:var(--ko);margin:0}
+.rmean{font-size:13px;color:var(--muted);margin:0}
+.rwords{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:14px;margin:0;padding:0;list-style:none}
+.rfoot{grid-column:1/-1;border-top:1px solid var(--line);padding:8px 16px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;font-size:12px;color:var(--muted)}
+@media (max-width:480px){.rpair{grid-template-columns:1fr}.rside+.rside{border-left:0;border-top:1px solid var(--line)}}
+
+/* sessions */
+details.sess{background:var(--surface);border:1px solid var(--line);border-radius:var(--r)}
+details.sess>summary{cursor:pointer;padding:14px 16px;display:flex;flex-wrap:wrap;gap:6px 12px;align-items:baseline;list-style:none}
+details.sess>summary::-webkit-details-marker{display:none}
+.sno{font:500 12px var(--mono);color:var(--ko);letter-spacing:.06em}
+.stitle{font-weight:600}
+.sdate{font:12px var(--mono);color:var(--muted)}
+.sbody{padding:0 16px 16px;display:grid;gap:14px}
+.src{white-space:pre-wrap;background:var(--sunk);border-radius:8px;padding:12px 14px;margin:0;font-size:15px}
+.sub{font:600 12px var(--sans);color:var(--muted);letter-spacing:.04em;margin:0 0 6px}
+.vers{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px}
+.ver{border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:grid;gap:6px}
+.ver p{margin:0;white-space:pre-wrap}
+.who{font-size:12px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.who img{width:18px;height:18px;border-radius:50%}
+
+/* taglines */
+.tl{display:grid;gap:10px}
+.tl .t{font:700 22px/1.3 var(--sans);letter-spacing:-.01em;margin:0;overflow-wrap:anywhere}
+.tl .brief{font-size:13px;color:var(--muted);margin:0}
+.cmts{display:grid;gap:8px;border-left:2px solid var(--line);padding-left:12px}
+.cmt{font-size:14px}
+.cmt .who{margin-bottom:2px}
+.cmt p{margin:0;white-space:pre-wrap}
+.cmt-form{display:flex;gap:8px}
+.cmt-form input{flex:1;min-width:0}
+.login{max-width:420px;display:grid;gap:12px;margin:24px auto}
+.login h2{margin:0;font:700 20px var(--serif)}
+@media (prefers-reduced-motion:no-preference){.flash{transition:border-color .2s}}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Root <span class="amp">&amp;</span> Register</h1>
+      <p>뿌리와 결 · 통번역사와 카피라이터의 어원·격 공동 노트</p>
+    </div>
+    <div class="me" id="me"></div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="review">오늘의 복습</button>
+    <button role="tab" data-tab="terms">용어집</button>
+    <button role="tab" data-tab="roots">어근 짝</button>
+    <button role="tab" data-tab="sessions">세션 기록</button>
+    <button role="tab" data-tab="taglines">태그라인 보드</button>
+  </nav>
+  <main id="panel" class="panel" aria-live="polite"></main>
+</div>
+
+<script>
+(function(){
+"use strict";
+const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테크","공문·행정"];
+const REGISTERS=["구어","문어","전문"];
+const INTERVAL={1:1,2:2,3:4,4:8,5:16};
+const TABS=["review","terms","roots","sessions","taglines"];
+
+const S={
+  sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
+  terms:[],roots:[],sessions:[],taglines:[],
+  review:{exists:false,items:{}},
+  tab:"review",revealed:false,reviewLang:"all",seen:{},
+  f:{q:"",lang:"all",reg:"all",dom:"all"},
+  names:{},open:new Set(),confirm:null,dirty:new Map(),pending:false,msg:"",sample:null,gen:null,genErr:null,shown:new Set(),showAll:false
+};
+try{const t=localStorage.getItem("rr.tab");if(TABS.includes(t))S.tab=t}catch(e){}
+if(TABS.includes(location.hash.slice(1)))S.tab=location.hash.slice(1);
+
+const $=s=>document.querySelector(s);
+const esc=v=>String(v==null?"":v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const addDays=n=>{const d=new Date();d.setDate(d.getDate()+n);return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+const isKo=s=>/[ㄱ-힝一-鿿]/.test(s||"");
+function exs(t){
+  const a=Array.isArray(t.examples)&&t.examples.length?t.examples:(t.example?[t.example]:[]);
+  return a.map(x=>typeof x==="string"?{s:x,t:""}:{s:String(x&&x.s||""),t:String(x&&x.t||"")}).filter(x=>x.s);
+}
+function exList(t,cls,noT){
+  const a=exs(t);if(!a.length)return "";
+  const w=String(t.word||"").replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+  const stem=t.lang==="ko"?w.replace(/하다$|다$/,""):w.split(" ")[0];
+  const re=stem.length>=2?new RegExp("("+stem+"[\\w가-힣]*)","i"):null;
+  return '<ol class="exs'+(cls?" "+cls:"")+'">'+a.map(x=>{let h=esc(x.s);if(re)h=h.replace(re,"<mark>$1</mark>");return '<li><span class="s">'+h+'</span>'+(x.t&&!noT?'<span class="t">'+esc(x.t)+'</span>':"")+'</li>'}).join("")+'</ol>';
+}
+async function genExamples(t,replace){
+  if(!S.sample||!S.canWrite||S.gen)return;
+  S.gen=t.id;S.genErr=null;render();
+  try{
+    const {data,error}=await S.sb.functions.invoke("examples",{body:{term_id:t.id,replace:!!replace}});
+    if(error)throw error;
+    if(data&&Array.isArray(data.examples)){const x=S.terms.find(y=>y.id===t.id);if(x)x.examples=data.examples}
+  }catch(e){
+    const st=e&&e.context&&e.context.status;
+    S.genErr=st===429?"요청이 많아요. 잠시 뒤 다시 눌러 주세요.":"예문을 만들지 못했어요. 다시 눌러 주세요.";
+  }
+  S.gen=null;render();
+}
+const split=s=>String(s||"").split(/[,，、]/).map(x=>x.trim()).filter(Boolean);
+
+/* ---------- names ---------- */
+function whoHTML(id){
+  if(!id)return '<span class="who">예시</span>';
+  const p=S.names[id];
+  const nm=id===S.uid?"나":(p&&p.name)||id.split("@")[0];
+  const av=p&&p.avatarUrl?'<img alt="" src="'+esc(p.avatarUrl)+'">':"";
+  return '<span class="who">'+av+esc(nm)+'</span>';
+}
+function resolveNames(){}
+
+/* ---------- review logic ---------- */
+function rec(id){return (S.review.items||{})[id]||null}
+function dueTerms(){
+  const t=today();
+  return S.terms.filter(x=>{
+    if(S.reviewLang!=="all"&&x.lang!==S.reviewLang)return false;
+    const r=rec(x.id);return !r||!r.due||r.due<=t;
+  }).sort((a,b)=>(S.seen[a.id]||0)-(S.seen[b.id]||0)||((rec(a.id)?1:0)-(rec(b.id)?1:0))||(a.createdAt||0)-(b.createdAt||0));
+}
+function autoGen(){const q=dueTerms();const t=q[0];if(t&&exs(t).length<3)genExamples(t,false)}
+async function grade(id,g){
+  if(!S.sb||!S.uid)return;
+  const r=rec(id)||{box:0};
+  let box=r.box||0,due;
+  if(g==="again"){box=1;due=today()}
+  else if(g==="hard"){box=Math.max(1,box);due=addDays(1)}
+  else {box=Math.min(5,box+1);due=addDays(INTERVAL[box])}
+  S.seen[id]=Date.now();S.revealed=false;S.genErr=null;
+  const entry={box,due,last:today()};
+  S.review.items={...S.review.items,[id]:entry};
+  render();
+  try{
+    const {error}=await S.sb.from("reviews").upsert({author:S.uid,term_id:id,box,due,last:today()});
+    if(error)throw error;
+  }catch(e){flash("복습 기록을 저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.")}
+}
+
+/* ---------- render ---------- */
+function flash(m){S.msg=m;render();setTimeout(()=>{if(S.msg===m){S.msg="";render()}},4000)}
+function renderStats(){
+  const due=S.terms.length?dueTerms().length:0;
+  $("#stats").innerHTML=
+    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>어근 짝 <b>'+S.roots.length+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
+  for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
+}
+function render(){
+  const ae=document.activeElement;
+  if(ae&&$("#panel").contains(ae)&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)&&ae.type!=="button"){S.pending=true;renderStats();return}
+  S.pending=false;
+  renderStats();
+  let h="";
+  if(S.msg)h+='<div class="banner" role="status">'+esc(S.msg)+'</div>';
+  if(S.dbState==="loading")h+='<div class="empty">노트를 불러오는 중…</div>';
+  else if(S.dbState==="off")h+='<div class="banner">설정(config.js)을 불러오지 못했어요. 관리자에게 알려 주세요.</div>';
+  else if(S.dbState==="login")h+=vLogin();
+  else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 은(는) 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
+  else{
+    if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
+    h+=({review:vReview,terms:vTerms,roots:vRoots,sessions:vSessions,taglines:vTaglines})[S.tab]();
+  }
+  $("#panel").innerHTML=h;
+  for(const [id,v] of S.dirty){const el=document.getElementById(id);if(el)el.value=v}
+  resolveNames();
+}
+function opt(list,sel,all){return (all?'<option value="all">'+all+'</option>':"")+list.map(v=>'<option'+(v===sel?" selected":"")+'>'+esc(v)+'</option>').join("")}
+function langChip(l){return l==="ko"?'<span class="chip ko">한국어</span>':'<span class="chip en">ENGLISH</span>'}
+
+function vReview(){
+  if(!S.terms.length)return '<div class="empty">아직 용어가 없어요. 용어집에서 첫 용어를 추가해 보세요.</div>';
+  const q=dueTerms();
+  const counts=[0,0,0,0,0,0];for(const t of S.terms){const r=rec(t.id);counts[r?r.box||0:0]++}
+  let h='<div class="rv-top"><div class="seg" role="group" aria-label="언어">'+
+    [["all","전체"],["en","영어"],["ko","한국어"]].map(([k,l])=>'<button data-action="rlang" data-v="'+k+'" aria-pressed="'+(S.reviewLang===k)+'">'+l+'</button>').join("")+
+    '</div><div class="boxes"><span>새 용어 <b>'+counts[0]+'</b></span>'+[1,2,3,4,5].map(i=>'<span>'+i+'단계 <b>'+counts[i]+'</b></span>').join("")+'</div></div>';
+  if(!S.uid)return h+'<div class="banner">복습 기록은 사람마다 따로 저장돼요. 로그인한 상태에서 열어야 복습할 수 있어요.</div>';
+  if(!q.length)return h+'<div class="empty">오늘 복습할 용어를 모두 끝냈어요. 다음 복습은 내일 이후에 돌아와요.</div>';
+  const t=q[0],r=rec(t.id);
+  h+='<article class="flash"><div class="chips">'+langChip(t.lang)+'<span class="chip">'+esc(t.register||"")+'</span><span class="chip">'+esc(t.domain||"")+'</span>'+(r?'<span class="chip">'+r.box+'단계</span>':'<span class="chip">새 용어</span>')+'<span class="chip">남은 카드 '+q.length+'</span></div>'+
+    '<p class="word '+(t.lang==="ko"?"ko":"en")+'">'+esc(t.word)+'</p>';
+  if(!S.revealed)h+='<button class="reveal" data-action="reveal">뜻 보기</button>';
+  else{
+    const root=t.rootId&&S.roots.find(x=>x.id===t.rootId);
+    h+='<div class="back"><p class="meaning">'+esc(t.meaning)+'</p><dl class="kv">'+
+      (t.pair?'<dt>대응 표현</dt><dd>'+esc(t.pair)+'</dd>':"")+
+      (root?'<dt>어근</dt><dd>'+esc(root.en&&root.en.root)+' · '+esc(root.ko&&root.ko.hanja)+'</dd>':"")+
+      '</dl>'+exBlock(t)+'</div><div class="grade">'+
+      '<button class="g-again" data-action="grade" data-g="again" data-id="'+esc(t.id)+'">다시<small>오늘 한 번 더</small></button>'+
+      '<button class="g-hard" data-action="grade" data-g="hard" data-id="'+esc(t.id)+'">애매<small>내일</small></button>'+
+      '<button class="g-good" data-action="grade" data-g="good" data-id="'+esc(t.id)+'">알았음<small>'+INTERVAL[Math.min(5,(r&&r.box||0)+1)]+'일 뒤</small></button></div>';
+  }
+  return h+'</article>';
+}
+
+function exBlock(t){
+  const n=exs(t).length,busy=S.gen===t.id;
+  let h='<div class="ex-head"><span class="sub" style="margin:0">예문'+(n?" "+n+"개":"")+'</span>'+
+    (S.sample&&S.canWrite&&!busy&&n?'<button class="link" data-action="gen" data-mode="replace" data-id="'+esc(t.id)+'">다른 예문 받기</button>':"")+'</div>';
+  if(busy)h+='<p class="note">예문을 만드는 중…</p>';
+  else if(n)h+=exList(t);
+  else if(S.sample&&S.canWrite)h+='<button class="btn small" data-action="gen" data-id="'+esc(t.id)+'">예문 만들기</button>';
+  else h+='<p class="note">예문이 아직 없어요.</p>';
+  if(S.genErr&&!busy)h+='<p class="note" role="status">'+esc(S.genErr)+'</p>';
+  return h;
+}
+function vTerms(){
+  const f=S.f,q=f.q.trim().toLowerCase();
+  const list=S.terms.filter(t=>(f.lang==="all"||t.lang===f.lang)&&(f.reg==="all"||t.register===f.reg)&&(f.dom==="all"||t.domain===f.dom)&&
+    (!q||[t.word,t.meaning,t.pair].concat(exs(t).map(x=>x.s)).some(v=>String(v||"").toLowerCase().includes(q)))).sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  let h=addTermForm();
+  h+='<div class="filters"><input type="search" id="f-q" placeholder="단어, 뜻, 예문 검색" value="'+esc(f.q)+'" aria-label="검색">'+
+    '<div class="sel"><select id="f-lang" aria-label="언어"><option value="all">모든 언어</option><option value="en"'+(f.lang==="en"?" selected":"")+'>영어</option><option value="ko"'+(f.lang==="ko"?" selected":"")+'>한국어</option></select>'+
+    '<select id="f-reg" aria-label="격">'+opt(REGISTERS,f.reg,"모든 격")+'</select><select id="f-dom" aria-label="분야">'+opt(DOMAINS,f.dom,"모든 분야")+'</select></div></div>';
+  h+='<div class="rv-top"><p class="note">'+list.length+'개 표시 중 · 영어 용어는 단어와 예문만 먼저 보여요</p><button class="link" data-action="show-all">'+(S.showAll?"영어 뜻 모두 숨기기":"영어 뜻 모두 보기")+'</button></div>';
+  if(!list.length)return h+'<div class="empty">조건에 맞는 용어가 없어요.</div>';
+  return h+'<div class="terms">'+list.map(t=>{
+    const root=t.rootId&&S.roots.find(x=>x.id===t.rootId);
+    const hide=t.lang==="en"&&!S.showAll&&!S.shown.has(t.id);
+    const tog=t.lang==="en"?'<button class="link" data-action="toggle-term" data-id="'+esc(t.id)+'">'+(hide?"뜻 보기":"뜻 숨기기")+'</button>':"";
+    const pairOk=t.pair&&(!hide||!isKo(t.pair));
+    return '<div class="term"><div class="hd"><span class="w '+(t.lang==="ko"?"ko":"")+'">'+esc(t.word)+'</span>'+(pairOk?'<span class="pair">← '+esc(t.pair)+'</span>':"")+'</div>'+
+      (hide?"":'<div>'+esc(t.meaning)+'</div>')+exList(t,"small",hide)+(tog?'<div>'+tog+'</div>':"")+
+      '<div class="meta">'+langChip(t.lang)+'<span class="chip">'+esc(t.register)+'</span><span class="chip">'+esc(t.domain)+'</span>'+(root?'<span class="chip">'+esc(root.en.root)+' · '+esc(root.ko.hanja)+'</span>':"")+whoHTML(t.addedBy)+
+      (S.canWrite?(S.confirm===t.id?' <button class="btn small danger" data-action="del" data-col="terms" data-id="'+esc(t.id)+'">삭제 확인</button> <button class="link" data-action="cancel">취소</button>':' <button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+
+      '</div></div>'}).join("")+'</div>';
+}
+function addTermForm(){
+  if(!S.canWrite)return "";
+  const roots=S.roots.slice().sort((a,b)=>(a.session||0)-(b.session||0));
+  return '<details class="add" data-key="add-term"'+(S.open.has("add-term")?" open":"")+'><summary>용어 추가</summary><form data-form="term">'+
+    '<div class="grid2"><label class="f">단어·표현<input type="text" id="t-word" required placeholder="예: 검토하다 / leverage"></label>'+
+    '<label class="f">대응 표현 (구어형·반대 언어)<input type="text" id="t-pair" placeholder="예: 알아보다"></label></div>'+
+    '<label class="f">뜻<input type="text" id="t-meaning" required placeholder="뜻이나 번역어"></label>'+
+    '<label class="f">예문 (한 줄에 하나, 비워 두면 뜻 보기 때 자동으로 만들어요)<textarea id="t-example" placeholder="실제로 쓰인 문장"></textarea></label>'+
+    '<div class="grid2"><label class="f">격<select id="t-reg">'+opt(REGISTERS,"문어")+'</select></label>'+
+    '<label class="f">분야<select id="t-dom">'+opt(DOMAINS,"일반")+'</select></label>'+
+    '<label class="f">어근 짝 (선택)<select id="t-root"><option value="">없음</option>'+roots.map(r=>'<option value="'+esc(r.id)+'">'+esc(r.en.root)+' · '+esc(r.ko.hanja)+'</option>').join("")+'</select></label></div>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">추가</button><span class="note">언어는 입력한 글자로 자동 판별해요.</span></div></form></details>';
+}
+
+function vRoots(){
+  let h="";
+  if(S.canWrite)h+='<details class="add" data-key="add-root"'+(S.open.has("add-root")?" open":"")+'><summary>어근 짝 추가</summary><form data-form="root">'+
+    '<div class="grid2"><label class="f">영어 어근<input type="text" id="r-en" required placeholder="예: spir-"></label><label class="f">어근 뜻<input type="text" id="r-enm" required placeholder="예: 숨, 숨 쉬다"></label></div>'+
+    '<label class="f">영어 파생어 (쉼표로 구분)<input type="text" id="r-enw" placeholder="inspire, aspire, expire"></label>'+
+    '<div class="grid2"><label class="f">한자<input type="text" id="r-han" required placeholder="예: 氣"></label><label class="f">훈음<input type="text" id="r-hun" required placeholder="예: 기운 기"></label></div>'+
+    '<label class="f">한자어 (쉼표로 구분)<input type="text" id="r-kow" placeholder="활기, 사기, 용기"></label>'+
+    '<div class="grid2"><label class="f">세션 번호<input type="number" id="r-sess" min="1" max="12"></label><label class="f">메모<input type="text" id="r-note" placeholder="두 어근의 뜻 차이 등"></label></div>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
+  if(!S.roots.length)return h+'<div class="empty">아직 어근 짝이 없어요.</div>';
+  const list=S.roots.slice().sort((a,b)=>(a.session||99)-(b.session||99)||(a.createdAt||0)-(b.createdAt||0));
+  return h+'<div class="roots">'+list.map(r=>{
+    const used=S.terms.filter(t=>t.rootId===r.id).length;
+    return '<article class="rpair"><div class="rside en"><p class="rroot">'+esc(r.en.root)+'</p><p class="rmean">'+esc(r.en.meaning)+'</p><ul class="rwords">'+(r.en.words||[]).map(w=>'<li>'+esc(w)+'</li>').join("")+'</ul></div>'+
+      '<div class="rside ko"><p class="rhan">'+esc(r.ko.hanja)+'</p><p class="rmean">'+esc(r.ko.hun)+'</p><ul class="rwords ko-word">'+(r.ko.words||[]).map(w=>'<li>'+esc(w)+'</li>').join("")+'</ul></div>'+
+      '<div class="rfoot"><span>'+(r.session?"세션 "+esc(r.session)+" · ":"")+(r.note?esc(r.note):"")+'</span><span>연결된 용어 '+used+'개'+
+      (S.canWrite?(S.confirm===r.id?' · <button class="link" data-action="del" data-col="roots" data-id="'+esc(r.id)+'">삭제 확인</button> <button class="link" data-action="cancel">취소</button>':' · <button class="link" data-action="ask" data-id="'+esc(r.id)+'">삭제</button>'):"")+'</span></div></article>'}).join("")+'</div>';
+}
+
+function vSessions(){
+  let h="";
+  const nextNo=S.sessions.reduce((m,s)=>Math.max(m,s.no||0),0)+1;
+  if(S.canWrite)h+='<details class="add" data-key="add-sess"'+(S.open.has("add-sess")?" open":"")+'><summary>세션 원문 추가</summary><form data-form="session">'+
+    '<div class="grid2"><label class="f">세션 번호<input type="number" id="s-no" min="1" max="12" value="'+nextNo+'" required></label><label class="f">날짜<input type="date" id="s-date"></label>'+
+    '<label class="f">방향<select id="s-dir"><option>KR→EN</option><option>EN→KR</option></select></label></div>'+
+    '<label class="f">제목<input type="text" id="s-title" required placeholder="예: 대역 기사 · 경제"></label>'+
+    '<label class="f">원문<textarea id="s-src" required></textarea></label>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
+  if(!S.sessions.length)return h+'<div class="empty">아직 세션 원문이 없어요.</div>';
+  const list=S.sessions.slice().sort((a,b)=>(b.no||0)-(a.no||0)||String(b.dir).localeCompare(String(a.dir)));
+  return h+list.map((s,i)=>{
+    const key="sess-"+s.id,open=S.open.has(key)||(!S.open.has("touched-sess")&&i<2);
+    const vers=s.versions||{},mine=S.uid?vers[S.uid]:"";
+    const others=Object.keys(vers).filter(k=>k!==S.uid&&vers[k]);
+    return '<details class="sess" data-key="'+key+'"'+(open?" open":"")+'><summary><span class="sno">SESSION '+esc(s.no)+'</span><span class="stitle">'+esc(s.title)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+'</summary>'+
+      '<div class="sbody"><div><p class="sub">원문</p><p class="src">'+esc(s.source)+'</p></div>'+
+      '<div><p class="sub">번역</p><div class="vers">'+
+        (S.canWrite&&S.uid?'<div class="ver"><label class="f">내 번역<textarea id="v-'+esc(s.id)+'">'+esc(mine||"")+'</textarea></label><div class="row-actions"><button class="btn small" data-action="save-ver" data-id="'+esc(s.id)+'">저장</button></div></div>':(mine?'<div class="ver">'+whoHTML(S.uid)+'<p>'+esc(mine)+'</p></div>':""))+
+        others.map(k=>'<div class="ver">'+whoHTML(k)+'<p>'+esc(vers[k])+'</p></div>').join("")+
+        (!others.length?'<div class="ver"><p class="note">상대 번역이 아직 없어요.</p></div>':"")+
+      '</div></div>'+
+      field(s,"final","합의안","세션에서 함께 다듬은 최종 번역")+field(s,"notes","메모","발견한 표현, Grammar Clinic 포인트, 다음 과제")+
+      (S.canWrite?'<div class="row-actions">'+(S.confirm===s.id?'<button class="btn small danger" data-action="del" data-col="sessions" data-id="'+esc(s.id)+'">세션 삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(s.id)+'">세션 삭제</button>')+'</div>':"")+
+      '</div></details>'}).join("");
+}
+function field(s,k,label,ph){
+  if(!S.canWrite)return s[k]?'<div><p class="sub">'+label+'</p><p class="src">'+esc(s[k])+'</p></div>':"";
+  return '<div><label class="f">'+label+'<textarea id="'+k+'-'+esc(s.id)+'" placeholder="'+ph+'">'+esc(s[k]||"")+'</textarea></label><div class="row-actions" style="margin-top:6px"><button class="btn small" data-action="save-field" data-k="'+k+'" data-id="'+esc(s.id)+'">저장</button></div></div>';
+}
+
+function vTaglines(){
+  let h="";
+  if(S.canWrite)h+='<details class="add" data-key="add-tl"'+(S.open.has("add-tl")?" open":"")+'><summary>태그라인 올리기</summary><form data-form="tagline">'+
+    '<label class="f">태그라인<input type="text" id="g-text" required placeholder="영어 태그라인"></label>'+
+    '<label class="f">브리프 (제품, 타깃, 톤)<input type="text" id="g-brief" placeholder="예: 20대 대상 제로 슈거 탄산수, 경쾌한 톤"></label>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">올리기</button></div></form></details>';
+  if(!S.taglines.length)return h+'<div class="empty">아직 올라온 태그라인이 없어요.</div>';
+  const list=S.taglines.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+  return h+list.map(t=>{
+    const cs=Object.entries(t.comments||{}).map(([id,c])=>({id,...c})).sort((a,b)=>(a.at||0)-(b.at||0));
+    return '<article class="card tl"><p class="t">'+esc(t.text)+'</p>'+(t.brief?'<p class="brief">'+esc(t.brief)+'</p>':"")+
+      '<div class="row-actions">'+whoHTML(t.addedBy)+(S.canWrite?(S.confirm===t.id?'<button class="btn small danger" data-action="del" data-col="taglines" data-id="'+esc(t.id)+'">삭제 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(t.id)+'">삭제</button>'):"")+'</div>'+
+      (cs.length?'<div class="cmts">'+cs.map(c=>'<div class="cmt">'+whoHTML(c.by)+'<p>'+esc(c.text)+'</p></div>').join("")+'</div>':"")+
+      (S.canWrite?'<form class="cmt-form" data-form="comment" data-id="'+esc(t.id)+'"><input type="text" id="c-'+esc(t.id)+'" placeholder="피드백, 대안 표현" aria-label="코멘트"><button class="btn small" type="submit">남기기</button></form>':"")+
+      '</article>'}).join("");
+}
+
+/* ---------- writes ---------- */
+function val(id){const el=document.getElementById(id);return el?el.value.trim():""}
+function clear(ids){for(const i of ids)S.dirty.delete(i)}
+async function write(fn,okMsg){
+  try{const r=await fn();if(r&&r.error)throw r.error;await reload();if(okMsg)flash(okMsg)}
+  catch(e){flash("저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.");return false}
+  return true;
+}
+async function onSubmit(form){
+  const kind=form.dataset.form;
+  if(!S.sb)return;
+  if(kind==="term"){
+    const word=val("t-word"),meaning=val("t-meaning");if(!word||!meaning)return;
+    const doc={word,meaning,pair:val("t-pair"),examples:val("t-example").split(/\n+/).map(x=>x.trim()).filter(Boolean).slice(0,5).map(x=>({s:x,t:""})),register:val("t-reg"),domain:val("t-dom"),root_id:val("t-root")||null,lang:isKo(word)?"ko":"en"};
+    if(await write(()=>S.sb.from("terms").insert(doc),"‘"+word+"’을(를) 추가했어요."))clear(["t-word","t-meaning","t-pair","t-example"]);
+  }else if(kind==="root"){
+    const doc={en:{root:val("r-en"),meaning:val("r-enm"),words:split(val("r-enw"))},ko:{hanja:val("r-han"),hun:val("r-hun"),words:split(val("r-kow"))},session:Number(val("r-sess"))||null,note:val("r-note")};
+    if(!doc.en.root||!doc.ko.hanja)return;
+    if(await write(()=>S.sb.from("roots").insert(doc),"어근 짝을 추가했어요."))clear(["r-en","r-enm","r-enw","r-han","r-hun","r-kow","r-sess","r-note"]);
+  }else if(kind==="session"){
+    const doc={no:Number(val("s-no"))||1,date:val("s-date")||null,dir:val("s-dir"),title:val("s-title"),source:val("s-src")};
+    if(!doc.title||!doc.source)return;
+    if(await write(()=>S.sb.from("sessions").insert(doc),"세션 원문을 추가했어요."))clear(["s-no","s-date","s-dir","s-title","s-src"]);
+  }else if(kind==="tagline"){
+    const text=val("g-text");if(!text)return;
+    const doc={text,brief:val("g-brief")};
+    if(await write(()=>S.sb.from("taglines").insert(doc),"태그라인을 올렸어요."))clear(["g-text","g-brief"]);
+  }else if(kind==="comment"){
+    const id=form.dataset.id,text=val("c-"+id);if(!text)return;
+    if(await write(()=>S.sb.from("tagline_comments").insert({tagline_id:id,body:text})))clear(["c-"+id]);
+  }
+  document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
+  render();
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+  const tb=e.target.closest("#tabs button");
+  if(tb){S.tab=tb.dataset.tab;S.confirm=null;S.revealed=false;try{localStorage.setItem("rr.tab",S.tab)}catch(_){}render();return}
+  const b=e.target.closest("[data-action]");if(!b)return;
+  const a=b.dataset.action,id=b.dataset.id;
+  if(a==="toggle-term"){S.shown.has(id)?S.shown.delete(id):S.shown.add(id);render()}
+  else if(a==="show-all"){S.showAll=!S.showAll;S.shown.clear();render()}
+  else if(a==="reveal"){S.revealed=true;S.genErr=null;render();autoGen()}
+  else if(a==="gen"){const t=S.terms.find(x=>x.id===id);if(t)genExamples(t,b.dataset.mode==="replace")}
+  else if(a==="grade")grade(id,b.dataset.g);
+  else if(a==="rlang"){S.reviewLang=b.dataset.v;S.revealed=false;render()}
+  else if(a==="ask"){S.confirm=id;render()}
+  else if(a==="cancel"){S.confirm=null;render()}
+  else if(a==="del"){S.confirm=null;await write(()=>S.sb.from(b.dataset.col).delete().eq("id",id),"삭제했어요.")}
+  else if(a==="save-ver"){
+    if(!S.uid)return;const v=(document.getElementById("v-"+id)||{}).value||"";
+    if(await write(()=>S.sb.from("session_versions").upsert({session_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 저장했어요."))clear(["v-"+id]);
+  }else if(a==="save-field"){
+    const k=b.dataset.k,v=(document.getElementById(k+"-"+id)||{}).value||"";
+    if(await write(()=>S.sb.from("sessions").update({[k]:v}).eq("id",id),"저장했어요."))clear([k+"-"+id]);
+  }
+});
+document.addEventListener("submit",e=>{e.preventDefault();if(e.target.dataset.form==="login")login();else onSubmit(e.target)});
+document.addEventListener("input",e=>{
+  const t=e.target;if(!t.id)return;
+  if(t.id==="f-q"){S.f.q=t.value;return}
+  if(t.closest&&t.closest("#panel"))S.dirty.set(t.id,t.value);
+});
+document.addEventListener("change",e=>{
+  const t=e.target,m={"f-lang":"lang","f-reg":"reg","f-dom":"dom"}[t.id];
+  if(m){S.f[m]=t.value;t.blur();render()}
+});
+document.addEventListener("keyup",e=>{if(e.target.id==="f-q"){const ae=e.target,pos=ae.selectionStart;S.pending=false;
+  // re-render the list while keeping the search box focused
+  const saved=document.activeElement;saved.blur();render();const n=document.getElementById("f-q");if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}});
+document.addEventListener("toggle",e=>{
+  const d=e.target;if(!(d instanceof HTMLDetailsElement)||!d.dataset.key)return;
+  if(d.dataset.key.startsWith("sess-"))S.open.add("touched-sess");
+  if(d.open)S.open.add(d.dataset.key);else S.open.delete(d.dataset.key);
+},true);
+document.addEventListener("focusout",()=>{setTimeout(()=>{if(S.pending)render()},0)});
+document.addEventListener("keydown",e=>{
+  if(S.tab!=="review"||/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
+  if(e.key===" "&&!S.revealed&&document.querySelector('[data-action="reveal"]')){e.preventDefault();S.revealed=true;S.genErr=null;render();autoGen()}
+  else if(S.revealed&&["1","2","3"].includes(e.key)){const g=["again","hard","good"][+e.key-1];const b=document.querySelector('[data-action="grade"][data-g="'+g+'"]');if(b)b.click()}
+});
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)){S.tab=h;render()}});
+
+/* ---------- auth ---------- */
+function vLogin(){
+  if(S.sent)return '<div class="login"><h2>메일함을 확인하세요</h2><p class="note">'+esc(S.sent)+' 으로 로그인 링크를 보냈어요. 링크를 누르면 이 페이지로 돌아와요.</p><div class="row-actions"><button class="link" data-action="resend">다른 이메일로 받기</button></div></div>';
+  return '<form class="login" data-form="login"><h2>로그인</h2><p class="note">멤버로 등록된 이메일을 입력하면 로그인 링크를 보내 드려요.</p><label class="f">이메일<input type="email" id="l-email" required autocomplete="email" style="width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;font-size:15px"></label><div class="row-actions"><button class="btn primary" type="submit">로그인 링크 받기</button></div></form>';
+}
+async function login(){
+  const email=val("l-email").toLowerCase();if(!email)return;
+  const {error}=await S.sb.auth.signInWithOtp({email,options:{emailRedirectTo:location.origin+location.pathname}});
+  if(error){flash("로그인 링크를 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.");return}
+  S.sent=email;clear(["l-email"]);render();
+}
+document.addEventListener("click",async e=>{
+  const b=e.target.closest("[data-action]");if(!b)return;
+  if(b.dataset.action==="logout"){await S.sb.auth.signOut();location.reload()}
+  else if(b.dataset.action==="resend"){S.sent=null;render()}
+});
+
+/* ---------- data ---------- */
+const T=r=>new Date(r.created_at).getTime();
+const loaders={
+  async terms(){const {data,error}=await S.sb.from("terms").select("*").limit(5000);if(error)throw error;
+    S.terms=data.map(r=>({...r,rootId:r.root_id,addedBy:r.added_by,createdAt:T(r)}))},
+  async roots(){const {data,error}=await S.sb.from("roots").select("*");if(error)throw error;
+    S.roots=data.map(r=>({...r,addedBy:r.added_by,createdAt:T(r)}))},
+  async sessions(){
+    const [a,b]=await Promise.all([S.sb.from("sessions").select("*"),S.sb.from("session_versions").select("*")]);
+    if(a.error)throw a.error;if(b.error)throw b.error;
+    S.sessions=a.data.map(r=>{const versions={};for(const v of b.data)if(v.session_id===r.id)versions[v.author]=v.body;return {...r,date:r.date||"",versions,createdAt:T(r)}})},
+  async taglines(){
+    const [a,b]=await Promise.all([S.sb.from("taglines").select("*"),S.sb.from("tagline_comments").select("*")]);
+    if(a.error)throw a.error;if(b.error)throw b.error;
+    S.taglines=a.data.map(r=>{const comments={};for(const c of b.data)if(c.tagline_id===r.id)comments[c.id]={by:c.author,text:c.body,at:new Date(c.created_at).getTime()};return {...r,addedBy:r.added_by,comments,createdAt:T(r)}})},
+  async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
+    const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
+};
+const TABLE_TO_LOADER={terms:"terms",roots:"roots",sessions:"sessions",session_versions:"sessions",taglines:"taglines",tagline_comments:"taglines",reviews:"reviews"};
+async function reload(which){
+  const keys=which?[which]:Object.keys(loaders);
+  await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
+  render();
+}
+
+/* ---------- boot ---------- */
+render();
+(async()=>{
+  const cfg=window.RR_CONFIG;
+  if(!cfg||!window.supabase){S.dbState="off";render();return}
+  S.sb=window.supabase.createClient(cfg.supabaseUrl,cfg.supabaseAnonKey);
+  let started=false;
+  async function start(session){
+    if(!session){S.dbState="login";$("#me").innerHTML="";render();return}
+    if(started)return;started=true;
+    S.uid=(session.user.email||"").toLowerCase();
+    const {data:members}=await S.sb.from("members").select("email,display_name");
+    for(const m of members||[])S.names[m.email]={name:m.display_name};
+    if(!(members||[]).some(m=>m.email===S.uid)){S.dbState="notmember";render();return}
+    S.sample=true;
+    $("#me").innerHTML='<span>'+esc(S.names[S.uid].name)+'</span><button class="link" data-action="logout">로그아웃</button>';
+    await reload();S.dbState="ready";render();
+    const ch=S.sb.channel("rr");
+    for(const t of Object.keys(TABLE_TO_LOADER))ch.on("postgres_changes",{event:"*",schema:"public",table:t},()=>reload(TABLE_TO_LOADER[t]));
+    ch.subscribe();
+  }
+  const {data}=await S.sb.auth.getSession();
+  await start(data.session);
+  S.sb.auth.onAuthStateChange((ev,session)=>{if(ev==="SIGNED_IN")start(session);else if(ev==="SIGNED_OUT")location.reload()});
+})();
+})();
+</script>
