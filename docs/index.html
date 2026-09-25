@@ -48,6 +48,8 @@ body{background:var(--bg);color:var(--ink);font:15px/1.65 var(--sans);letter-spa
 header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:28px 16px}
 .brand h1{margin:0;font:800 30px/1.1 var(--display);letter-spacing:-.03em;text-wrap:balance}
 .brand h1 .amp{color:var(--ko)}
+.home-link{color:inherit;text-decoration:none;border-radius:6px}
+.home-link:hover{opacity:.8}
 .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
 .me{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .me img{width:26px;height:26px;border-radius:50%}
@@ -267,7 +269,7 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
 <div class="wrap">
   <header class="top">
     <div class="brand">
-      <h1>Root <span class="amp">&amp;</span> Register</h1>
+      <h1><a href="/" class="home-link" id="home-link" title="처음 화면(오늘의 문장)으로">Root <span class="amp">&amp;</span> Register</a></h1>
       <p>뿌리와 결 · 통번역사와 카피라이터의 어원·격 공동 노트</p>
     </div>
     <div class="me" id="me"></div>
@@ -910,6 +912,12 @@ document.addEventListener("keydown",e=>{
   if(S.tab!=="review"||/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
   if(e.key===" "&&!S.revealed&&document.querySelector('[data-action="reveal"]')){e.preventDefault();S.revealed=true;render()}
   else if(S.revealed&&["1","2","3"].includes(e.key)){const g=["again","hard","good"][+e.key-1];const b=document.querySelector('[data-action="grade"][data-g="'+g+'"]');if(b)b.click()}
+});
+// 제목을 누르면 처음 화면(오늘의 문장)으로. 로그인 전에는 평범한 링크로 동작한다.
+document.addEventListener("click",e=>{
+  const h=e.target.closest("#home-link");
+  if(!h||S.dbState!=="ready"||e.metaKey||e.ctrlKey||e.shiftKey)return;
+  e.preventDefault();S.confirm=null;S.revealed=false;setTab("daily");
 });
 function setTab(t){
   if(!TABS.includes(t))return;
