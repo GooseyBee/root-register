@@ -208,6 +208,19 @@ details.sess>summary::-webkit-details-marker{display:none}
 .guide .sts{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:0}
 .guide .sts dd{margin:0;color:var(--muted)}
 .guide .tip{background:var(--sunk);border-radius:10px;padding:10px 12px}
+.ncards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.nc{display:grid;gap:8px;align-content:start}
+.nc .nm{margin:0;font:750 24px/1.2 var(--display);letter-spacing:-.02em}
+.nc .gl{margin:0;font-size:13px;color:var(--en);font-weight:600}
+.nc .why{margin:0;font-size:14px;color:var(--muted);line-height:1.6}
+.nc .acts{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.vote[aria-pressed="true"]{background:var(--ko-soft);border-color:var(--ko);color:var(--ko)}
+.nc.both{border-color:var(--ko);box-shadow:0 0 0 3px var(--ko-soft),var(--shadow)}
+.results{display:grid;gap:10px}
+.rrow{display:grid;grid-template-columns:minmax(90px,160px) 1fr auto;gap:10px;align-items:center;font-size:14px}
+.rrow .bar{height:10px;border-radius:999px;background:var(--sunk);overflow:hidden}
+.rrow .bar i{display:block;height:100%;background:var(--ko);border-radius:999px}
+.rrow b{font-family:var(--display);font-size:15px}
 .cnote{border-left:3px solid var(--en);background:var(--en-soft);border-radius:0 10px 10px 0;padding:10px 12px;font-size:14px}
 .cnote b{display:block;font-size:12px;color:var(--en);margin-bottom:2px}
 .login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:28px 24px;display:grid;gap:16px}
@@ -240,6 +253,7 @@ details.sess>summary::-webkit-details-marker{display:none}
     <button role="tab" data-tab="sessions">함께 번역</button>
     <button role="tab" data-tab="taglines">태그라인 보드</button>
     <button role="tab" data-tab="requests">건의함</button>
+    <button role="tab" data-tab="names">이름 정하기</button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
 </div>
@@ -251,7 +265,7 @@ const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테�
 const REGISTERS=["구어","문어","전문"];
 const LEVELS=["쉬움","보통","실전"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
-const TABS=["daily","drills","review","terms","sessions","taglines","requests"];
+const TABS=["daily","drills","review","terms","sessions","taglines","requests","names"];
 const KINDS=["기능 추가","수정·버그","콘텐츠","디자인","기타"];
 const STATUS={new:"새 건의",reviewing:"검토 중",planned:"예정",in_progress:"작업 중",done:"완료",declined:"보류"};
 const OPEN_ST=["new","reviewing","planned","in_progress"];
@@ -261,7 +275,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -348,7 +362,7 @@ function render(){
   else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 은(는) 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
   else{
     if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
-    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests})[S.tab]();
+    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests,names:vNames})[S.tab]();
   }
   $("#panel").innerHTML=h;
   for(const [id,v] of S.dirty){const el=document.getElementById(id);if(el)el.value=v}
@@ -628,6 +642,42 @@ function vRequests(){
   }).join("");
 }
 
+/* ---------- naming vote (이름 정하기) ---------- */
+function vNames(){
+  const members=Object.keys(S.names);
+  const nm=m=>m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0];
+  const votesOf=id=>S.nameVotes.filter(v=>v.candidate_id===id).map(v=>v.author);
+  const active=S.names_c.filter(c=>c.shown&&!c.excluded).sort((a,b)=>a.sort-b.sort||String(a.created_at).localeCompare(String(b.created_at)));
+  const pool=S.names_c.filter(c=>!c.shown&&!c.excluded);
+  const out=S.names_c.filter(c=>c.excluded).sort((a,b)=>String(b.excluded_at).localeCompare(String(a.excluded_at)));
+  let h='<p class="note">앱 이름 후보예요. 마음에 드는 후보에 모두 <b>좋아요</b>를 누르세요. 둘 다 좋아한 후보는 빨간 테두리로 표시돼요. 마음에 안 드는 후보는 <b>빼기</b>로 치우고 <b>다시 추천하기</b>로 새 후보를 받아요.</p>';
+  // results
+  const ranked=active.map(c=>({c,v:votesOf(c.id)})).filter(x=>x.v.length).sort((a,b)=>b.v.length-a.v.length||a.c.sort-b.c.sort);
+  h+='<section class="card results"><p class="sub" style="margin:0">투표 결과</p>'+
+    (ranked.length?ranked.map(x=>'<div class="rrow"><b>'+esc(x.c.name)+'</b><span class="bar"><i style="width:'+Math.round(100*x.v.length/Math.max(1,members.length))+'%"></i></span><span class="note">'+x.v.map(nm).map(esc).join(" · ")+(members.length&&x.v.length>=members.length?' · <b style="color:var(--ko)">둘 다 좋아해요</b>':'')+'</span></div>').join(""):'<p class="note" style="margin:0">아직 투표가 없어요. 아래 후보에 좋아요를 눌러 보세요.</p>')+'</section>';
+  // candidates
+  h+='<div class="ncards">'+active.map(c=>{
+    const v=votesOf(c.id),mine=v.includes(S.uid),both=members.length>1&&v.length>=members.length;
+    return '<article class="card nc'+(both?" both":"")+'"><p class="nm">'+esc(c.name)+'</p>'+(c.gloss?'<p class="gl">'+esc(c.gloss)+'</p>':"")+(c.why?'<p class="why">'+esc(c.why)+'</p>':"")+
+      (c.added_by?'<p class="note" style="margin:0">'+esc(nm(c.added_by))+' 제안</p>':"")+
+      '<div class="acts"><button class="btn small vote" data-action="nvote" data-id="'+esc(c.id)+'" aria-pressed="'+mine+'">'+(mine?"♥ 좋아요":"♡ 좋아요")+(v.length?" "+v.length:"")+'</button>'+
+      (S.confirm===c.id?'<button class="btn small danger" data-action="nexclude" data-id="'+esc(c.id)+'">빼기 확인</button><button class="link" data-action="cancel">취소</button>':'<button class="link" data-action="ask" data-id="'+esc(c.id)+'">빼기</button>')+
+      '</div></article>';
+  }).join("")+'</div>';
+  if(!active.length)h+='<div class="empty">보이는 후보가 없어요. 다시 추천하기를 눌러 주세요.</div>';
+  // actions
+  h+='<div class="row-actions">'+(pool.length?'<button class="btn primary" data-action="nmore">다시 추천하기</button><span class="note">남은 추천 후보 '+pool.length+'개</span>':
+    '<span class="note">준비된 추천 후보를 모두 봤어요.</span><button class="btn" data-action="nask">Claude에게 새 후보 요청</button>')+'</div>';
+  h+='<details class="add" data-key="add-name"'+(S.open.has("add-name")?" open":"")+'><summary>직접 후보 추가</summary><form data-form="name">'+
+    '<label class="f">이름<input type="text" id="n-name" required placeholder="예: 말결 노트"></label>'+
+    '<label class="f">뜻 (한 줄)<input type="text" id="n-gloss" placeholder="이름의 뜻"></label>'+
+    '<label class="f">왜 어울리는지<input type="text" id="n-why" placeholder="선택"></label>'+
+    '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
+  if(out.length)h+='<details class="add" data-key="names-out"'+(S.open.has("names-out")?" open":"")+'><summary>빠진 후보 '+out.length+'개</summary><div class="past">'+
+    out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b> <span class="note">· '+esc(nm(c.excluded_by||""))+'이(가) 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
+  return h;
+}
+
 /* ---------- writes ---------- */
 function val(id){const el=document.getElementById(id);return el?el.value.trim():""}
 function clear(ids){for(const i of ids)S.dirty.delete(i)}
@@ -654,6 +704,9 @@ async function onSubmit(form){
   }else if(kind==="request"){
     const title=val("q-title");if(!title)return;
     if(await write(()=>S.sb.from("requests").insert({title,kind:val("q-kind"),body:val("q-body")}),"건의를 올렸어요. Claude가 확인할 거예요."))clear(["q-title","q-kind","q-body"]);
+  }else if(kind==="name"){
+    const name=val("n-name");if(!name)return;
+    if(await write(()=>S.sb.from("name_candidates").insert({name,gloss:val("n-gloss"),why:val("n-why"),shown:true}),"‘"+name+"’을(를) 후보에 추가했어요."))clear(["n-name","n-gloss","n-why"]);
   }else if(kind==="comment"){
     const type=form.dataset.type,id=form.dataset.id,iid="c-"+type+"-"+id,text=val(iid);if(!text)return;
     if(await write(()=>S.sb.from("comments").insert({target_type:type,target_id:id,body:text})))clear([iid]);
@@ -685,6 +738,21 @@ document.addEventListener("click",async e=>{
   else if(a==="fav-only"){const l=b.dataset.list;S.favOnly[l]=!S.favOnly[l];render()}
   else if(a==="cmt-toggle"){const k=b.dataset.k;S.cmtOpen.has(k)?S.cmtOpen.delete(k):S.cmtOpen.add(k);render()}
   else if(a==="cmt-del"){S.confirm=null;await write(()=>S.sb.from("comments").delete().eq("id",id),"코멘트를 지웠어요.")}
+  else if(a==="nvote"){
+    const on=S.nameVotes.some(v=>v.candidate_id===id&&v.author===S.uid);
+    await write(()=>on?S.sb.from("name_votes").delete().eq("candidate_id",id).eq("author",S.uid):S.sb.from("name_votes").insert({candidate_id:id}));
+  }
+  else if(a==="nexclude"){S.confirm=null;await write(()=>S.sb.from("name_candidates").update({excluded:true,excluded_by:S.uid,excluded_at:new Date().toISOString()}).eq("id",id),"후보를 뺐어요. 빠진 후보에서 되살릴 수 있어요.")}
+  else if(a==="nrestore"){await write(()=>S.sb.from("name_candidates").update({excluded:false,excluded_by:null,excluded_at:null}).eq("id",id),"후보를 되살렸어요.")}
+  else if(a==="nmore"){
+    const next=S.names_c.filter(c=>!c.shown&&!c.excluded).sort((x,y)=>x.sort-y.sort).slice(0,4).map(c=>c.id);
+    if(next.length)await write(()=>S.sb.from("name_candidates").update({shown:true}).in("id",next),"새 후보 "+next.length+"개를 추천했어요.");
+  }
+  else if(a==="nask"){
+    const liked=[...new Set(S.nameVotes.map(v=>v.candidate_id))].map(i=>(S.names_c.find(c=>c.id===i)||{}).name).filter(Boolean);
+    const out=S.names_c.filter(c=>c.excluded).map(c=>c.name);
+    await write(()=>S.sb.from("requests").insert({title:"이름 후보를 더 추천해 주세요",kind:"콘텐츠",body:"좋아요 받은 후보: "+(liked.join(", ")||"없음")+"\n빠진 후보: "+(out.join(", ")||"없음")}),"건의함에 새 후보 요청을 올렸어요. Claude가 확인하면 후보가 추가돼요.");
+  }
   else if(a==="req-filter"){S.reqFilter=b.dataset.v;render()}
   else if(a==="req-edit"){S.reqEdit=id||null;render()}
   else if(a==="req-save"){
@@ -832,11 +900,15 @@ const loaders={
     S.drills=a.data;S.drillAns=b.data;S.drillStatus=d.data||[];
     S.drillModels={};for(const m of c.data)S.drillModels[m.drill_id]=m;
   },
+  async names(){
+    const [a,b]=await Promise.all([S.sb.from("name_candidates").select("*"),S.sb.from("name_votes").select("candidate_id,author")]);
+    if(a.error)throw a.error;if(b.error)throw b.error;S.names_c=a.data;S.nameVotes=b.data;
+  },
   async requests(){const {data,error}=await S.sb.from("requests").select("*");if(error)throw error;S.requests=data},
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
