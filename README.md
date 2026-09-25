@@ -268,3 +268,18 @@ flowchart LR
 - 로그인 전에는 메뉴와 ☰ 버튼을 모두 숨기고, 본문을 가운데 정렬해요(`.shell:has(> nav[hidden])`).
 - 접근성: ☰ 버튼에 `aria-expanded`와 "메뉴 열기/닫기" 라벨을 달았고, 서랍이 열리면 현재 탭으로 포커스가 가요. Esc로 닫으면 포커스가 ☰ 버튼으로 돌아와요.
 - 확인: Playwright로 1280px과 390px 화면을 캡처했어요. ☰ 열기와 Esc 닫기를 눌러 봤고, 런타임 오류는 0건이었어요.
+
+### 2026-09-25 · Vercel과 GitHub 연결 (자동 배포)
+- 문제: 메뉴 변경을 `main`에 올렸는데 사이트가 바뀌지 않았어요. 처음 배포할 때 `vercel git connect`가 실패해서 Vercel이 GitHub와 연결되지 않은 상태였어요. 그동안은 `npx vercel deploy --prod`로 직접 배포할 때만 사이트가 바뀌었어요.
+- 해결: 희주 님이 Vercel 프로젝트 설정(Settings → Git)에서 `gooseybee/root-register`를 연결했어요.
+- 이제 흐름은 이래요.
+
+```mermaid
+flowchart LR
+  C[Claude Code 세션] -->|push| M[GitHub main]
+  M -->|Vercel GitHub 앱| V[Vercel 빌드<br/>Root Directory: docs]
+  V --> S[root-register.vercel.app]
+```
+
+- 헷갈리기 쉬운 점: GitHub의 **Authorized GitHub Apps**는 로그인 권한 목록이라 저장소 권한을 줄 수 없어요. 저장소 권한은 **Installed GitHub Apps**나 https://github.com/apps/vercel 에서 줘요. Vercel **팀** 설정의 Git 메뉴("Origin")가 아니라 **프로젝트** 설정의 Git 메뉴에서 연결해요.
+- 작업 방식: Claude는 작업 브랜치와 `main`에 함께 push해요. `main`이 곧 배포예요.
