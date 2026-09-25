@@ -1,4 +1,10 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Root &amp; Register</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%231B2220%22/%3E%3Ctext x=%2216%22 y=%2223%22 font-size=%2220%22 text-anchor=%22middle%22 fill=%22%23E8736A%22 font-family=%22serif%22%3E%26%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@500;700&display=swap">
@@ -29,6 +35,9 @@
   --ok:#62C08A; --warn:#E0A94A; --bad:#E8736A;
 }
 *{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
 body{background:var(--bg);color:var(--ink);font:15px/1.6 var(--sans);padding-inline:16px;padding-block:0 48px}
 .wrap{max-width:880px;margin:0 auto}
 header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;padding-block:28px 16px}
@@ -165,11 +174,19 @@ details.sess>summary::-webkit-details-marker{display:none}
 .model{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .model .best{margin:0;font:600 17px/1.5 var(--sans);color:var(--en)}
 .model ul{margin:0;padding-left:18px;font-size:14px}
-.login{max-width:420px;display:grid;gap:12px;margin:24px auto}
-.login h2{margin:0;font:700 20px var(--serif)}
+.login{width:100%;max-width:400px;margin:40px auto 0;box-sizing:border-box;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:28px 24px;display:grid;gap:16px}
+.login h2{margin:0;font:700 22px var(--serif)}
+.login .seg{display:grid;grid-template-columns:1fr 1fr;width:100%}
+.login .seg button{padding:10px;font-size:14px;font-weight:500}
+.login .note{margin:-6px 0 0}
+.login input[type=email],.login input[type=password]{width:100%;box-sizing:border-box;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:11px 12px;font-size:16px;color:var(--ink)}
+.login input:focus{border-color:var(--en);outline:none;box-shadow:0 0 0 3px var(--en-soft)}
+.login .actions{display:grid;gap:10px;justify-items:center;margin-top:4px}
+.login .actions .btn.primary{width:100%;padding:12px;font-size:15px}
 @media (prefers-reduced-motion:no-preference){.flash{transition:border-color .2s}}
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header class="top">
     <div class="brand">
@@ -268,6 +285,7 @@ async function grade(id,g){
 function flash(m){S.msg=m;render();setTimeout(()=>{if(S.msg===m){S.msg="";render()}},4000)}
 function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
+  const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;
   $("#stats").innerHTML=
     '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>세션 <b>'+S.sessions.length+'</b>/12</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
@@ -589,21 +607,21 @@ document.addEventListener("keydown",e=>{
 window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(TABS.includes(h)){S.tab=h;render()}});
 
 /* ---------- auth ---------- */
-const INP='style="width:100%;border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:8px 10px;font-size:15px"';
+const INP='';
 function vLogin(){
   const m=S.authMode||"login";
-  if(S.sent)return '<div class="login"><h2>메일함을 확인하세요</h2><p class="note">'+esc(S.sent)+'</p><div class="row-actions"><button class="link" data-action="auth-mode" data-v="login">로그인 화면으로</button></div></div>';
+  if(S.sent)return '<div class="login"><h2>메일함을 확인하세요</h2><p class="note">'+esc(S.sent)+'</p><div class="actions"><button class="link" data-action="auth-mode" data-v="login">로그인 화면으로</button></div></div>';
   const tabs='<div class="seg" role="group" aria-label="로그인 방식"><button type="button" data-action="auth-mode" data-v="login" aria-pressed="'+(m==="login")+'">로그인</button><button type="button" data-action="auth-mode" data-v="signup" aria-pressed="'+(m==="signup")+'">회원가입</button></div>';
   const email='<label class="f">이메일<input type="email" id="l-email" name="email" required autocomplete="username" '+INP+'></label>';
-  if(m==="newpw")return '<form class="login" data-form="auth" data-mode="newpw"><h2>새 비밀번호 설정</h2><input type="hidden" name="email" autocomplete="username" value="'+esc(S.uid||"")+'"><label class="f">새 비밀번호 (8자 이상)<input type="password" id="l-pw" name="new-password" required minlength="8" autocomplete="new-password" '+INP+'></label><div class="row-actions"><button class="btn primary" type="submit">저장</button></div></form>';
-  if(m==="reset")return '<form class="login" data-form="auth" data-mode="reset"><h2>비밀번호 재설정</h2><p class="note">가입한 이메일로 재설정 링크를 보내 드려요.</p>'+email+'<div class="row-actions"><button class="btn primary" type="submit">재설정 링크 받기</button><button type="button" class="link" data-action="auth-mode" data-v="login">돌아가기</button></div></form>';
-  if(m==="signup")return '<form class="login" data-form="auth" data-mode="signup">'+tabs+'<h2>회원가입</h2><p class="note">등록된 두 멤버의 이메일로만 가입할 수 있어요. 가입 후 확인 메일의 링크를 한 번 눌러 주세요.</p>'+email+
+  if(m==="newpw")return '<form class="login" data-form="auth" data-mode="newpw"><h2>새 비밀번호 설정</h2><input type="hidden" name="email" autocomplete="username" value="'+esc(S.uid||"")+'"><label class="f">새 비밀번호 (8자 이상)<input type="password" id="l-pw" name="new-password" required minlength="8" autocomplete="new-password" '+INP+'></label><div class="actions"><button class="btn primary" type="submit">저장</button></div></form>';
+  if(m==="reset")return '<form class="login" data-form="auth" data-mode="reset"><h2>비밀번호 재설정</h2><p class="note">가입한 이메일로 재설정 링크를 보내 드려요.</p>'+email+'<div class="actions"><button class="btn primary" type="submit">재설정 링크 받기</button><button type="button" class="link" data-action="auth-mode" data-v="login">로그인으로 돌아가기</button></div></form>';
+  if(m==="signup")return '<form class="login" data-form="auth" data-mode="signup">'+tabs+'<p class="note">등록된 두 멤버의 이메일로만 가입할 수 있어요. 가입 후 확인 메일의 링크를 한 번 눌러 주세요.</p>'+email+
     '<label class="f">비밀번호 (8자 이상)<input type="password" id="l-pw" name="new-password" required minlength="8" autocomplete="new-password" '+INP+'></label>'+
     '<label class="f">비밀번호 확인<input type="password" id="l-pw2" required minlength="8" autocomplete="new-password" '+INP+'></label>'+
-    '<div class="row-actions"><button class="btn primary" type="submit">가입하기</button></div></form>';
-  return '<form class="login" data-form="auth" data-mode="login">'+tabs+'<h2>로그인</h2>'+email+
+    '<div class="actions"><button class="btn primary" type="submit">가입하기</button></div></form>';
+  return '<form class="login" data-form="auth" data-mode="login">'+tabs+''+email+
     '<label class="f">비밀번호<input type="password" id="l-pw" name="password" required autocomplete="current-password" '+INP+'></label>'+
-    '<div class="row-actions"><button class="btn primary" type="submit">로그인</button><button type="button" class="link" data-action="auth-mode" data-v="reset">비밀번호를 잊었어요</button></div></form>';
+    '<div class="actions"><button class="btn primary" type="submit">로그인</button><button type="button" class="link" data-action="auth-mode" data-v="reset">비밀번호를 잊었어요</button></div></form>';
 }
 function authError(e){
   const m=String(e&&e.message||"");
@@ -705,3 +723,5 @@ render();
 })();
 })();
 </script>
+</body>
+</html>
