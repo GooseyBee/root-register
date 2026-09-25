@@ -58,6 +58,13 @@ nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:v
 nav.tabs button{flex:0 0 auto;border:1px solid transparent;background:none;color:var(--muted);font:600 14px var(--sans);padding:8px 15px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s}
 nav.tabs button[aria-selected="true"]{background:var(--en);color:var(--on-accent);box-shadow:0 4px 12px color-mix(in srgb,var(--en) 30%,transparent)}
 nav.tabs button:hover:not([aria-selected="true"]){border-color:var(--line);color:var(--ink)}
+/* 임시 메뉴(이름 정하기): 투표가 끝나면 SHOW_NAMING=false 로 숨긴다 */
+nav.tabs .tab-temp{color:var(--ko);background:var(--ko-soft);border:1px dashed color-mix(in srgb,var(--ko) 55%,transparent)}
+nav.tabs .tab-temp::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ko);margin-right:7px;vertical-align:1px}
+nav.tabs .tab-temp:hover:not([aria-selected="true"]){color:var(--ko);border-color:var(--ko)}
+nav.tabs .tab-temp[aria-selected="true"]{background:var(--ko);border-color:var(--ko);color:#fff;box-shadow:0 4px 12px color-mix(in srgb,var(--ko) 30%,transparent)}
+nav.tabs .tab-temp[aria-selected="true"]::before{background:#fff}
+.tab-sep{flex:0 0 1px;align-self:stretch;background:var(--line);margin:6px 4px}
 button,input,select,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--en);outline-offset:2px}
 .btn{border:1px solid var(--line);background:var(--surface);padding:8px 15px;border-radius:10px;cursor:pointer;font-weight:600;font-size:14px;transition:transform .08s,background .15s}
@@ -246,6 +253,8 @@ details.sess>summary::-webkit-details-marker{display:none}
   </header>
   <div class="stats" id="stats"></div>
   <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="names" class="tab-temp" title="투표 기간에만 보이는 임시 메뉴예요">이름 정하기</button>
+    <span class="tab-sep" aria-hidden="true"></span>
     <button role="tab" data-tab="daily">오늘의 문장</button>
     <button role="tab" data-tab="drills">번역 연습</button>
     <button role="tab" data-tab="review">오늘의 복습</button>
@@ -253,7 +262,6 @@ details.sess>summary::-webkit-details-marker{display:none}
     <button role="tab" data-tab="sessions">함께 번역</button>
     <button role="tab" data-tab="taglines">태그라인 보드</button>
     <button role="tab" data-tab="requests">건의함</button>
-    <button role="tab" data-tab="names">이름 정하기</button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
 </div>
@@ -266,6 +274,9 @@ const REGISTERS=["구어","문어","전문"];
 const LEVELS=["쉬움","보통","실전"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
 const TABS=["daily","drills","review","terms","sessions","taglines","requests","names"];
+// 이름 정하기는 투표 기간에만 쓰는 임시 메뉴. 투표가 끝나면 false 로 바꾸면 탭이 사라진다(데이터는 남는다).
+const SHOW_NAMING=true;
+if(!SHOW_NAMING){TABS.splice(TABS.indexOf("names"),1);document.querySelector('#tabs [data-tab="names"]')?.remove();document.querySelector('#tabs .tab-sep')?.remove()}
 const KINDS=["기능 추가","수정·버그","콘텐츠","디자인","기타"];
 const STATUS={new:"새 건의",reviewing:"검토 중",planned:"예정",in_progress:"작업 중",done:"완료",declined:"보류"};
 const OPEN_ST=["new","reviewing","planned","in_progress"];
