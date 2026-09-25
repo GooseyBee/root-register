@@ -54,26 +54,8 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .stats{display:flex;flex-wrap:wrap;gap:8px;font:500 12px/1.4 var(--sans);color:var(--muted);padding-bottom:6px}
 .stats span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
 .stats b{color:var(--en);font-weight:700;font-variant-numeric:tabular-nums}
-/* layout: menu column on the left (desktop) / slide-in drawer behind a hamburger (mobile) */
-.shell{max-width:1120px;margin:0 auto;display:grid;grid-template-columns:180px minmax(0,1fr);gap:32px;align-items:start}
-.shell .wrap{max-width:880px;margin:0;width:100%}
-.shell:has(> nav[hidden]){display:block}
-.shell:has(> nav[hidden]) .wrap{margin:0 auto}
-nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;display:flex;flex-direction:column;gap:2px;padding-block:32px 16px}
-nav.tabs button{text-align:left;border:1px solid transparent;background:none;color:var(--muted);font:600 14px var(--sans);padding:9px 14px;border-radius:10px;cursor:pointer;transition:background .15s,color .15s}
-.menu-btn{display:none;align-items:center;justify-content:center;width:40px;height:40px;flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;cursor:pointer}
-.nav-scrim{display:none}
-@media (max-width:860px){
-  .shell{display:block}
-  header.top{align-items:center;padding-block:16px 12px}
-  header.top .brand{flex:1 1 0;min-width:0}
-  .brand h1{font-size:24px}
-  .menu-btn{display:inline-flex}
-  nav.tabs{position:fixed;inset:0 auto 0 0;width:min(260px,80vw);z-index:20;background:var(--surface);border-right:1px solid var(--line);box-shadow:var(--shadow);padding:calc(env(safe-area-inset-top,0px) + 20px) 12px 20px;overflow-y:auto;transform:translateX(-105%);visibility:hidden;transition:transform .2s ease,visibility 0s linear .2s}
-  body.nav-open nav.tabs{transform:none;visibility:visible;transition:transform .2s ease}
-  body.nav-open .nav-scrim{display:block;position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.35)}
-  body.nav-open{overflow:hidden}
-}
+nav.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);display:flex;gap:4px;overflow-x:auto;padding-block:10px;margin-bottom:14px;scrollbar-width:none}
+nav.tabs button{flex:0 0 auto;border:1px solid transparent;background:none;color:var(--muted);font:600 14px var(--sans);padding:8px 15px;border-radius:999px;cursor:pointer;transition:background .15s,color .15s}
 nav.tabs button[aria-selected="true"]{background:var(--en);color:var(--on-accent);box-shadow:0 4px 12px color-mix(in srgb,var(--en) 30%,transparent)}
 nav.tabs button:hover:not([aria-selected="true"]){border-color:var(--line);color:var(--ink)}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -241,8 +223,16 @@ details.sess>summary::-webkit-details-marker{display:none}
 </style>
 </head>
 <body>
-<div class="shell">
-  <nav class="tabs" role="tablist" aria-orientation="vertical" aria-label="메뉴" id="tabs">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Root <span class="amp">&amp;</span> Register</h1>
+      <p>뿌리와 결 · 통번역사와 카피라이터의 어원·격 공동 노트</p>
+    </div>
+    <div class="me" id="me"></div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-tab="daily">오늘의 문장</button>
     <button role="tab" data-tab="drills">번역 연습</button>
     <button role="tab" data-tab="review">오늘의 복습</button>
@@ -251,19 +241,7 @@ details.sess>summary::-webkit-details-marker{display:none}
     <button role="tab" data-tab="taglines">태그라인 보드</button>
     <button role="tab" data-tab="requests">건의함</button>
   </nav>
-  <div class="nav-scrim" id="navScrim"></div>
-<div class="wrap">
-  <header class="top">
-    <button class="menu-btn" id="menuBtn" type="button" aria-label="메뉴 열기" aria-expanded="false" aria-controls="tabs"><svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
-    <div class="brand">
-      <h1>Root <span class="amp">&amp;</span> Register</h1>
-      <p>뿌리와 결 · 통번역사와 카피라이터의 어원·격 공동 노트</p>
-    </div>
-    <div class="me" id="me"></div>
-  </header>
-  <div class="stats" id="stats"></div>
   <main id="panel" class="panel" aria-live="polite"></main>
-</div>
 </div>
 
 <script>
@@ -351,7 +329,7 @@ async function grade(id,g){
 function flash(m){S.msg=m;render();setTimeout(()=>{if(S.msg===m){S.msg="";render()}},4000)}
 function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
-  const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;$("#menuBtn").hidden=!ready;if(!ready)setNav(false);
+  const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;
   $("#stats").innerHTML=
     '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>함께 번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>태그라인 <b>'+S.taglines.length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
@@ -697,9 +675,7 @@ async function toggleFav(type,id){
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
   const tb=e.target.closest("#tabs button");
-  if(tb){S.confirm=null;S.revealed=false;setNav(false);setTab(tb.dataset.tab);return}
-  if(e.target.closest("#menuBtn")){setNav(!document.body.classList.contains("nav-open"));return}
-  if(e.target.closest("#navScrim")){setNav(false);return}
+  if(tb){S.confirm=null;S.revealed=false;setTab(tb.dataset.tab);return}
   const b=e.target.closest("[data-action]");if(!b)return;
   const a=b.dataset.action,id=b.dataset.id;
   if(a==="toggle-term"){S.shown.has(id)?S.shown.delete(id):S.shown.add(id);render()}
@@ -760,17 +736,10 @@ document.addEventListener("toggle",e=>{
 },true);
 document.addEventListener("focusout",()=>{setTimeout(()=>{if(S.pending)render()},0)});
 document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"&&document.body.classList.contains("nav-open")){setNav(false);$("#menuBtn").focus();return}
   if(S.tab!=="review"||/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName))return;
   if(e.key===" "&&!S.revealed&&document.querySelector('[data-action="reveal"]')){e.preventDefault();S.revealed=true;render()}
   else if(S.revealed&&["1","2","3"].includes(e.key)){const g=["again","hard","good"][+e.key-1];const b=document.querySelector('[data-action="grade"][data-g="'+g+'"]');if(b)b.click()}
 });
-// mobile drawer menu; on desktop the class has no visual effect
-function setNav(open){
-  document.body.classList.toggle("nav-open",open);
-  const b=$("#menuBtn");b.setAttribute("aria-expanded",String(open));b.setAttribute("aria-label",open?"메뉴 닫기":"메뉴 열기");
-  if(open){const s=$("#tabs [aria-selected=true]")||$("#tabs button");if(s)s.focus()}
-}
 function setTab(t){
   if(!TABS.includes(t))return;
   S.tab=t;
