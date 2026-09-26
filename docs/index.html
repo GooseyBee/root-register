@@ -70,6 +70,12 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .nrow b{font-weight:650}
 .nrow .note{font-size:12px}
 .push-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.notif-head{display:flex;align-items:center;justify-content:space-between}
+.notif-close{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px}
+/* 좁은 화면: 벨이 왼쪽으로 내려가서 오른쪽 기준 패널이 화면 밖으로 나간다 → 화면 안에 고정 */
+@media (max-width:640px){
+  .notif{position:fixed;left:12px;right:12px;width:auto;top:calc(env(safe-area-inset-top,0px) + 12px);max-height:calc(100dvh - 24px - env(safe-area-inset-top,0px))}
+}
 .stats{display:flex;flex-wrap:wrap;gap:8px;font:500 12px/1.4 var(--sans);color:var(--muted);padding-bottom:6px}
 .stats span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
 .stats b{color:var(--en);font-weight:700;font-variant-numeric:tabular-nums}
@@ -746,7 +752,7 @@ function renderBell(){
   bd.textContent=n;bd.hidden=!n;b.setAttribute("aria-expanded",String(S.notifOpen));
   const box=$("#notif");box.hidden=!S.notifOpen;if(!S.notifOpen)return;
   const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
-  let h='<h3>알림</h3>';
+  let h='<div class="notif-head"><h3>알림</h3><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
   const un=unseenFb(),pend=myPending();
   if(un.length)h+='<div class="sec"><p class="sub">피드백 답변 도착 <button class="link" data-action="fb-seen-all">모두 읽음</button></p>'+
     un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
@@ -758,7 +764,7 @@ function renderBell(){
     if(newR.length)h+='<div class="sec"><p class="sub">새 건의 '+newR.length+'개</p><button class="nrow" data-action="goto-requests"><b>'+esc(cut(newR[0].title,40))+(newR.length>1?' 외 '+(newR.length-1)+'개':'')+'</b><span class="note">건의함에서 보기</span></button></div>';
     if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(fmtTime(x.created_at))+' · '+(x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
   }
-  if(h==='<h3>알림</h3>')h+='<p class="note" style="margin:0">새 알림이 없어요.</p>';
+  if(h.endsWith('</button></div>')&&!h.includes('class="sec"'))h+='<p class="note" style="margin:0">새 알림이 없어요.</p>';
   const ps={on:"이 기기에서 휴대폰 알림을 받고 있어요.",off:"휴대폰 알림이 꺼져 있어요.",denied:"브라우저에서 알림이 차단돼 있어요. 브라우저 설정에서 이 사이트의 알림을 허용해 주세요.",
     "ios-home":"아이폰은 Safari 공유 버튼 → '홈 화면에 추가'를 한 뒤, 홈 화면 아이콘으로 열어서 켜 주세요.",unsupported:"이 브라우저는 휴대폰 알림을 지원하지 않아요.",unknown:"알림 상태를 확인하는 중이에요."}[S.pushState]||"";
   h+='<div class="sec"><p class="sub">휴대폰 알림</p><div class="push-row"><span class="note">'+ps+'</span>'+
@@ -1107,6 +1113,7 @@ document.addEventListener("click",async e=>{
   else if(a==="fb-retry"){runFeedback(id)}
   else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
   else if(a==="fb-open"){openFeedback(id)}
+  else if(a==="bell-close"){S.notifOpen=false;renderBell()}
   else if(a==="fb-seen-all"){const ids=unseenFb().map(f=>f.id),now=new Date().toISOString();for(const f of S.feedback)if(ids.includes(f.id))f.seen_at=now;if(ids.length)S.sb.from("feedback_requests").update({seen_at:now}).in("id",ids).then(()=>{});renderBell()}
   else if(a==="goto-requests"){S.notifOpen=false;S.reqFilter="open";setTab("requests")}
   else if(a==="push-on"){pushOn()}
