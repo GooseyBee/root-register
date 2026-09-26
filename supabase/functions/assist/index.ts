@@ -6,6 +6,7 @@
 //   { action: "comment-reply", id }   → 내 답장을 원래 코멘트 쓴 사람에게 푸시
 // DB 트리거(pg_net)가 x-hook-secret 헤더로 부른다:
 //   { action: "request-done", id }    → 건의가 완료되면 올린 사람에게 푸시
+//   { action: "content-added", kind, n, enkr, kren } → 새 번역 연습 문장·교차번역 원문이 들어오면 모두에게 푸시
 // 인증: 사용자 호출은 함수 안에서 토큰을 확인한다(getUser + members). 트리거 호출은 JWT가 없어서
 //       배포할 때 verify_jwt=false 로 두고, hook_secret 으로 확인한다.
 // 비밀값: GEMINI_API_KEY 는 Edge Function 시크릿(없으면 private.app_secrets 의 gemini_api_key),
@@ -41,6 +42,7 @@ Deno.serve(async (req) => {
     if (!expected || hook !== expected) return json({ error: "bad hook" }, 401);
     const hb = await req.json().catch(() => ({}));
     if (hb.action === "request-done") return json(await requestDone(db, String(hb.id || "")));
+    if (hb.action === "content-added") return json(await contentAdded(db, hb));
     return json({ error: "unknown hook" }, 400);
   }
 
@@ -215,6 +217,21 @@ async function requestDone(db: SupabaseClient, id: string) {
   if (!r || r.status !== "done") return { ok: false };
   const n = await pushTo(db, [r.author], { title: "건의가 완료됐어요 ✓", body: short(r.title) + (r.claude_note ? " · " + short(r.claude_note) : ""), url: "/requests?done=" + id, tag: "done-" + id });
   return { ok: true, sent: n };
+}
+
+async function contentAdded(db: SupabaseClient, b: any) {
+  const n = Number(b.n) || 0;
+  if (!n) return { ok: false };
+  const drill = b.kind === "drills";
+  const parts = drill ? [b.kren ? "한→영 " + b.kren : "", b.enkr ? "영→한 " + b.enkr : ""].filter(Boolean).join(", ") : "";
+  const { data } = await db.from("members").select("email");
+  const sent = await pushTo(db, (data || []).map((m) => m.email), {
+    title: drill ? "새 번역 연습 " + n + "문장이 올라왔어요" : "새 교차번역 원문 " + n + "개가 올라왔어요",
+    body: drill ? parts + " · 오늘 1~2문장 풀어 볼까요?" : "모임 전까지 각자 번역을 저장해 주세요.",
+    url: drill ? "/drills" : "/sessions",
+    tag: "content-" + b.kind,
+  });
+  return { ok: true, sent };
 }
 
 // ---------- 코멘트 답장 ----------
