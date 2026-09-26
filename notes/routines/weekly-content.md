@@ -25,6 +25,8 @@ flowchart TD
 - [ ] `select m.display_name, d.dir, count(a.*) from members m cross join (select distinct dir from drills) d left join drill_answers a on a.author=m.email and a.drill_id in (select id from drills where dir=d.dir) group by 1,2;` 로 진행 상황을 봐요(보고에만 써요).
 - [ ] `select no, level, dir, title, created_at from sessions order by no desc, created_at desc;` 로 교차번역 마지막 회차와 날짜를 봐요.
 
+> **한글 톤은 [`notes/style/korean-voice.md`](../style/korean-voice.md)를 따라요.** 마케팅은 세련된 브랜드 카피(상투어·재촉·최상급 금지), 비즈니스는 깔끔하게, 일상은 요즘 구어, 안내문은 실제 안내문 말투. 번역투(~을 통해, ~에 대한)는 빼요.
+
 ## 2. 번역 연습 (매주)
 방향마다 12문장, 주제(`marketing`, `business`, `daily`, `travel`)마다 3문장씩, 모두 24문장.
 
