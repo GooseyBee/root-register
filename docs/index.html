@@ -201,6 +201,14 @@ details.sess>summary::-webkit-details-marker{display:none}
 .chip.lv-보통{background:color-mix(in srgb,var(--warn) 18%,transparent);color:color-mix(in srgb,var(--warn) 65%,var(--ink))}
 .chip.lv-실전{background:var(--ko-soft);color:var(--ko)}
 .model{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+.fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.fb.done{display:grid;gap:6px;background:var(--en-soft);border-radius:10px;padding:12px 14px}
+.fb-body{white-space:pre-wrap;font-size:14px;line-height:1.65}
+.mistakes{margin:0;padding:0;list-style:none;display:grid;gap:10px}
+.mk-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+.mk-wrong{text-decoration:line-through;text-decoration-color:var(--bad);color:var(--muted)}
+.mk-better{font-weight:650;color:var(--en)}
+.chip.bad{background:var(--ko-soft);color:var(--ko)}
 .model .best{margin:0;font:650 19px/1.45 var(--display);color:var(--en);letter-spacing:-.01em}
 .model ul{margin:0;padding-left:18px;font-size:14px}
 .req{display:grid;gap:10px}
@@ -293,10 +301,10 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
     <button role="tab" data-tab="names" class="tab-temp" title="투표 기간에만 보이는 임시 메뉴예요">이름 정하기</button>
     <span class="tab-sep" aria-hidden="true"></span>
     <button role="tab" data-tab="daily">오늘의 문장</button>
-    <button role="tab" data-tab="terms">용어집</button>
     <button role="tab" data-tab="drills">번역 연습</button>
-    <button role="tab" data-tab="review">오늘의 복습</button>
     <button role="tab" data-tab="sessions">교차번역</button>
+    <button role="tab" data-tab="review">오늘의 복습</button>
+    <button role="tab" data-tab="terms">용어집</button>
     <button role="tab" data-tab="taglines">영어 카피 연습</button>
     <button role="tab" data-tab="requests" class="tab-meta" title="앱을 이렇게 바꿔 주세요: 개선 요청 게시판">건의함<span class="tab-badge" id="req-badge" hidden></span></button>
   </nav>
@@ -316,20 +324,22 @@ const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테�
 const REGISTERS=["구어","문어","전문"];
 const LEVELS=["쉬움","보통","실전"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
-const TABS=["daily","drills","review","terms","sessions","taglines","requests","names"];
+const TABS=["daily","drills","sessions","review","terms","taglines","requests","names"];
 // 이름 정하기는 투표 기간에만 쓰는 임시 메뉴. 투표가 끝나면 false 로 바꾸면 탭이 사라진다(데이터는 남는다).
 const SHOW_NAMING=true;
 if(!SHOW_NAMING){TABS.splice(TABS.indexOf("names"),1);document.querySelector('#tabs [data-tab="names"]')?.remove();document.querySelector('#tabs .tab-sep')?.remove()}
 const KINDS=["기능 추가","수정·버그","콘텐츠","디자인","기타"];
 const STATUS={new:"새 건의",reviewing:"검토 중",planned:"예정",in_progress:"작업 중",done:"완료",declined:"보류"};
 const OPEN_ST=["new","reviewing","planned","in_progress"];
+const DIRS=[["KR→EN","한→영"],["EN→KR","영→한"]];
+const langOf=dir=>dir==="EN→KR"?"ko":"en";  // 번역문(내 답·추천 표현)의 언어
 const TOPICS=[["marketing","마케팅·광고"],["business","비즈니스·이메일"],["daily","일상 회화"],["travel","여행 표현"]];
 
 const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -510,8 +520,8 @@ function vSessions(){
       '<div><p class="sub">번역</p><div class="vers">'+
         (S.canWrite&&S.uid?myVersion(s,mine):(mine?'<div class="ver">'+whoHTML(S.uid)+'<p>'+esc(mine)+'</p></div>':""))+
         others.map(k=>'<div class="ver">'+whoHTML(k)+'<p>'+esc(vers[k])+'</p></div>').join("")+
-        (!others.length?'<div class="ver"><p class="note">'+(mine?"상대가 아직 번역을 저장하지 않았어요.":"내 번역을 저장하면 상대 번역이 보여요.")+'</p>'+sessChips(s)+'</div>':"")+
-      '</div></div>'+
+        (!others.length?'<div class="ver"><p class="note">'+(mine?"상대가 아직 번역을 저장하지 않았어요.":"내 번역을 저장하면 상대 번역과 추천 표현이 보여요.")+'</p>'+sessChips(s)+'</div>':"")+
+      '</div>'+(mine&&S.sessModels[s.id]?modelHTML(S.sessModels[s.id],String(s.dir).startsWith("KR")?"en":"ko","smodel-"+s.id,s.id):"")+(mine?fbBlock("session",s.id):"")+'</div>'+
       field(s,"final","합의안","모임에서 함께 다듬은 최종 번역")+field(s,"notes","메모","발견한 표현, Grammar Clinic 포인트, 다음 과제")+
       '<div class="social">'+commentBlock("session",s.id)+'</div>'+
       (S.canWrite?'<div class="row-actions">'+askDel("원문 삭제",{do:"del",col:"sessions",id:s.id,what:"원문 ‘"+s.title+"’",extra:"두 사람의 번역, 합의안, 메모도 함께 지워져요."})+'</div>':"")+
@@ -656,33 +666,67 @@ function vDaily(){
 }
 
 /* ---------- translation drills ---------- */
+// 추천 표현 (번역 연습·교차번역 공통). openKey 로 펼침 상태를 기억한다.
+function modelHTML(model,lang,openKey,id){
+  if(!S.open.has(openKey))return '<button class="reveal" data-action="model-toggle" data-k="'+esc(openKey)+'">추천 표현 보기</button>';
+  return '<div class="model"><p class="sub" style="margin:0">추천 표현</p><p class="best" lang="'+lang+'">'+esc(model.best)+'</p>'+
+    ((model.alternatives||[]).length?'<p class="sub" style="margin:0">다르게 말하면</p><ul>'+model.alternatives.map(x=>'<li lang="'+lang+'">'+esc(x)+'</li>').join("")+'</ul>':"")+
+    ((model.notes||[]).length?'<p class="sub" style="margin:0">포인트</p><dl class="dwords">'+model.notes.map(n=>'<dt>'+esc(n.phrase)+'</dt><dd>'+esc(n.why)+'</dd>').join("")+'</dl>':"")+
+    '<div><button class="link" data-action="model-toggle" data-k="'+esc(openKey)+'">접기</button></div></div>';
+}
+// 내 번역에 대한 Claude 피드백: 요청 → 대기 → 답변. 앱은 AI를 부르지 않고, 희주가 "피드백 확인해줘"라고 하면 Claude가 답을 단다.
+function fbBlock(type,id){
+  if(!S.canWrite)return "";
+  const f=S.feedback.find(x=>x.target_type===type&&x.target_id===id&&x.author===S.uid);
+  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">왜 틀렸는지 Claude에게 묻기</button><span class="note">내 번역을 보고 틀린 곳과 더 나은 표현을 설명해 줘요.</span></div>';
+  if(!f.answered_at)return '<div class="fb wait"><span class="chip">피드백 요청함 · '+esc(fmtTime(f.created_at))+'</span><span class="note">희주가 Claude에게 피드백 확인을 부탁하면 여기에 설명이 달려요.</span>'+
+    '<button class="link" data-action="fb-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
+  return '<div class="fb done"><p class="sub" style="margin:0">Claude 피드백 <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div>'+
+    '<div class="row-actions"><button class="link" data-action="fb-again" data-id="'+esc(f.id)+'" data-type="'+type+'" data-tid="'+esc(id)+'">번역을 고쳤다면 다시 묻기</button></div></div>';
+}
+function vMistakes(){
+  const list=S.mistakes.filter(m=>m.author===S.uid).sort((a,b)=>b.count-a.count||String(b.last_seen).localeCompare(String(a.last_seen)));
+  const body=list.length?'<ol class="mistakes">'+list.map(m=>'<li><div class="mk-row"><span class="mk-wrong" lang="'+esc(m.lang)+'">'+esc(m.wrong)+'</span><span aria-hidden="true">→</span><span class="mk-better" lang="'+esc(m.lang)+'">'+esc(m.better)+'</span>'+(m.count>1?'<span class="chip bad">'+m.count+'번</span>':"")+'</div>'+(m.why?'<p class="note" style="margin:0">'+esc(m.why)+'</p>':"")+'</li>').join("")+'</ol>'
+    :'<p class="note" style="margin:0">아직 없어요. 피드백을 받으면 자주 틀리는 표현이 여기에 모여요.</p>';
+  return '<details class="add" data-key="mistakes"'+(S.open.has("mistakes")?" open":"")+'><summary>내 오답 노트 '+list.length+'</summary><div class="gbody">'+body+'</div></details>';
+}
+function vDrillGuide(){
+  return guideBox("guide-drill","번역 연습은 이렇게 써요",
+    '<p>짧은 문장을 혼자 옮겨 보는 매일 연습이에요. 정해진 주기는 없고, <b>하루 1~2문장</b>이면 충분해요.</p>'+
+    '<p class="sub" style="margin:0">진행 순서</p><ol>'+
+      '<li><b>방향</b>을 골라요. 희주는 <b>한→영</b>, 혜림은 <b>영→한</b>이 먼저 열리지만, 다른 방향도 눌러서 풀 수 있어요.</li>'+
+      '<li>주제를 고르고 <b>내 번역</b>을 써서 <b>제출</b>해요. 제출하면 잠기고, 고치려면 <b>수정</b>을 눌러요.</li>'+
+      '<li>제출하면 <b>추천 표현</b>이 열려요. 상대도 제출했다면 상대 번역도 보여요.</li>'+
+      '<li>왜 틀렸는지 궁금하면 <b>왜 틀렸는지 Claude에게 묻기</b>를 눌러요. 희주가 Claude에게 "피드백 확인해줘"라고 하면 설명이 달려요.</li>'+
+      '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요.</li>'+
+    '</ol>'+
+    '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
+}
 function vDrills(){
   const members=Object.keys(S.names);
   const submitted=(id,who)=>S.drillStatus.some(x=>x.drill_id===id&&x.author===who);
-  let h='<div class="rv-top"><div class="seg" role="group" aria-label="주제">'+
+  const lang=langOf(S.drillDir);
+  let h=vDrillGuide()+vMistakes();
+  h+='<div class="rv-top"><div class="seg" role="group" aria-label="방향">'+
+    DIRS.map(([k,l])=>'<button data-action="drill-dir" data-v="'+k+'" aria-pressed="'+(S.drillDir===k)+'">'+l+'</button>').join("")+'</div>'+
+    '<div class="seg" role="group" aria-label="주제">'+
     TOPICS.map(([k,l])=>'<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+'</button>').join("")+'</div>'+
     '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
-  h+='<p class="note">한국어 문장을 영어로 옮겨 제출하세요. 제출하면 추천 표현과 상대 번역(상대도 제출했을 때)이 열려요. 코멘트는 그 문장을 제출한 사람에게만 보여요.</p>';
-  const list=S.drills.filter(d=>d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="fav"||isFav("drill",d.id))).sort((a,b)=>a.sort-b.sort);
+  const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="fav"||isFav("drill",d.id))).sort((a,b)=>a.sort-b.sort);
   if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":"표시할 문장이 없어요.")+'</div>';
   return h+list.map(d=>{
     const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
     const others=S.drillAns.filter(a=>a.drill_id===d.id&&a.author!==S.uid);
-    const model=S.drillModels[d.id],k="drill:"+d.id,open=S.open.has("model-"+d.id);
-    let c='<article class="card drill"><p class="ctx">'+esc(d.context)+'</p><p class="ko">'+esc(d.ko)+'</p>'+
+    const model=S.drillModels[d.id];
+    let c='<article class="card drill"><p class="ctx">'+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
-    if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang:"en",ph:"영어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 상대 번역이 열려요."});
+    if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
-      if(others.length)c+='<div class="vers">'+others.map(a=>'<div class="ver">'+whoHTML(a.author)+'<p lang="en">'+esc(a.body)+'</p></div>').join("")+'</div>';
+      if(others.length)c+='<div class="vers">'+others.map(a=>'<div class="ver">'+whoHTML(a.author)+'<p lang="'+lang+'">'+esc(a.body)+'</p></div>').join("")+'</div>';
       else c+='<p class="note">상대가 제출하면 번역이 보여요.</p>';
-    }
-    if(mine&&model){
-      if(!open)c+='<button class="reveal" data-action="drill-model" data-id="'+esc(d.id)+'">추천 표현 보기</button>';
-      else c+='<div class="model"><p class="sub" style="margin:0">추천 표현</p><p class="best" lang="en">'+esc(model.best)+'</p>'+
-        ((model.alternatives||[]).length?'<p class="sub" style="margin:0">다르게 말하면</p><ul>'+model.alternatives.map(x=>'<li lang="en">'+esc(x)+'</li>').join("")+'</ul>':"")+
-        ((model.notes||[]).length?'<p class="sub" style="margin:0">포인트</p><dl class="dwords">'+model.notes.map(n=>'<dt lang="en">'+esc(n.phrase)+'</dt><dd>'+esc(n.why)+'</dd>').join("")+'</dl>':"")+
-        '<div><button class="link" data-action="drill-model" data-id="'+esc(d.id)+'">접기</button></div></div>';
-    }else if(!mine)c+='<p class="note">제출하면 추천 표현과 코멘트가 열려요.</p>';
+      if(model)c+=modelHTML(model,lang,"model-"+d.id,d.id);
+      c+=fbBlock("drill",d.id);
+    }else c+='<p class="note">제출하면 추천 표현과 코멘트가 열려요.</p>';
     c+='<div class="social">'+starBtn("drill",d.id)+commentBlock("drill",d.id)+'</div></article>';
     return c;
   }).join("");
@@ -725,6 +769,10 @@ function vSessionGuide(){
       '<li><b>모임 중</b>: 두 번역을 나란히 보며 비교해요. 영어 쪽은 희주가, 한국어 말맛과 격은 혜림이 주로 짚어요.</li>'+
       '<li><b>모임 끝</b>: 함께 다듬은 최종 번역을 <b>합의안</b>에, 발견한 표현, 문법 포인트, 다음 과제를 <b>메모</b>에 적고 각각 <b>저장</b>해요.</li>'+
       '<li><b>모임 후</b>: 기억하고 싶은 표현은 <b>용어집</b>에 추가하면 복습 카드로 돌아와요.</li>'+
+    '</ol>'+
+    '<p class="sub" style="margin:0">추천 표현과 피드백</p><ol>'+
+      '<li>내 번역을 저장하면 <b>추천 표현 보기</b>가 열려요. 추천 번역, 다르게 말하는 법, 포인트가 있어요. 새 원문의 추천 표현은 희주가 Claude에게 부탁하면 채워져요.</li>'+
+      '<li>내 번역이 왜 어색한지 궁금하면 <b>왜 틀렸는지 Claude에게 묻기</b>를 눌러요. 설명은 나만 보고, 자주 틀리는 표현은 번역 연습 탭의 <b>내 오답 노트</b>에 모여요.</li>'+
     '</ol>'+
     '<p class="sub" style="margin:0">난이도</p><dl class="sts">'+
       '<dt><span class="chip lv-쉬움">쉬움</span></dt><dd>1~2문장. 일상 대화, 안내문처럼 짧고 쉬운 글이에요. 처음엔 여기서 시작해요.</dd>'+
@@ -923,7 +971,14 @@ document.addEventListener("click",async e=>{
   else if(a==="sess-level"){S.sessLevel=b.dataset.v;render()}
   else if(a==="drill-topic"){S.drillTopic=b.dataset.v;render()}
   else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
-  else if(a==="drill-model"){const k="model-"+id;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
+  else if(a==="drill-dir"){S.drillDir=b.dataset.v;render()}
+  else if(a==="model-toggle"){const k=b.dataset.k;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
+  else if(a==="fb-req"){await write(()=>S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id}),"피드백을 요청했어요. Claude가 확인하면 설명이 달려요.")}
+  else if(a==="fb-cancel"){await write(()=>S.sb.from("feedback_requests").delete().eq("id",id),"요청을 취소했어요.")}
+  else if(a==="fb-again"){
+    const r=await S.sb.from("feedback_requests").delete().eq("id",id);if(r.error){flash("다시 요청하지 못했어요.");return}
+    await write(()=>S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:b.dataset.tid}),"다시 요청했어요.");
+  }
   else if(a==="drill-save"){
     const v=((document.getElementById("da-"+id)||{}).value||"").trim();
     if(!v){flash("번역을 입력해 주세요.");return}
@@ -1060,6 +1115,7 @@ const loaders={
   async sessions(){
     const [a,b,c]=await Promise.all([S.sb.from("sessions").select("*"),S.sb.from("session_versions").select("*"),S.sb.rpc("session_version_status")]);
     if(a.error)throw a.error;if(b.error)throw b.error;S.sessStatus=c.error?[]:(c.data||[]);
+    {const {data:ms}=await S.sb.from("session_models").select("*");S.sessModels={};for(const m of ms||[])S.sessModels[m.session_id]=m}
     S.sessions=a.data.map(r=>{const versions={},versionsAt={};for(const v of b.data)if(v.session_id===r.id){versions[v.author]=v.body;versionsAt[v.author]=v.updated_at}return {...r,date:r.date||"",versions,versionsAt,createdAt:T(r)}})},
   async taglines(){
     const [a,b,c]=await Promise.all([S.sb.from("taglines").select("*"),S.sb.from("copy_briefs").select("*"),S.sb.rpc("copy_status")]);
@@ -1085,6 +1141,10 @@ const loaders={
     S.drills=a.data;S.drillAns=b.data;S.drillStatus=d.data||[];
     S.drillModels={};for(const m of c.data)S.drillModels[m.drill_id]=m;
   },
+  async feedback(){
+    const [a,b]=await Promise.all([S.sb.from("feedback_requests").select("*"),S.sb.from("mistake_notes").select("*")]);
+    S.feedback=a.error?[]:a.data;S.mistakes=b.error?[]:b.data;
+  },
   async names(){
     const [a,b]=await Promise.all([S.sb.from("name_candidates").select("*"),S.sb.from("name_votes").select("candidate_id,author")]);
     if(a.error)throw a.error;if(b.error)throw b.error;S.names_c=a.data;S.nameVotes=b.data;
@@ -1093,7 +1153,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
@@ -1112,8 +1172,9 @@ render();
     if(!session){S.dbState="login";$("#me").innerHTML="";render();return}
     if(started)return;started=true;
     S.uid=(session.user.email||"").toLowerCase();
-    const {data:members}=await S.sb.from("members").select("email,display_name");
+    const {data:members}=await S.sb.from("members").select("email,display_name,drill_dir");
     for(const m of members||[])S.names[m.email]={name:m.display_name};
+    {const mine=(members||[]).find(m=>m.email===S.uid);if(mine&&mine.drill_dir)S.drillDir=mine.drill_dir}
     if(!(members||[]).some(m=>m.email===S.uid)){S.dbState="notmember";render();return}
     $("#me").innerHTML='<span>'+esc(S.names[S.uid].name)+'</span><button class="link" data-action="logout">로그아웃</button>';
     await reload();S.dbState="ready";
