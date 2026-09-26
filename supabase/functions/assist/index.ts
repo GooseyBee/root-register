@@ -4,9 +4,12 @@
 //   { action: "request-posted", id }  → 새 건의가 올라왔다고 관리자(희주)에게 푸시
 //   { action: "test-push", endpoint? } → 테스트 푸시. endpoint가 있으면 그 기기로만(버튼을 누른 기기), 없으면 내 모든 기기로
 //   { action: "comment-reply", id }   → 내 답장을 원래 코멘트 쓴 사람에게 푸시
+//   { action: "claude-requested", id } → Claude 정밀 검토 요청을 희주에게 푸시(루틴이 하루 3번 처리, 급하면 희주가 직접)
 // DB 트리거(pg_net)가 x-hook-secret 헤더로 부른다:
 //   { action: "request-done", id }    → 건의가 완료되면 올린 사람에게 푸시
 //   { action: "content-added", kind, n, enkr, kren } → 새 번역 연습 문장·교차번역 원문이 들어오면 모두에게 푸시
+//   { action: "claude-answered", id } → Claude 정밀 검토가 달리면 요청한 사람에게 푸시
+//   { action: "report-added", id }    → 주간 리포트가 들어오면 그 사람에게 푸시
 // 인증: 사용자 호출은 함수 안에서 토큰을 확인한다(getUser + members). 트리거 호출은 JWT가 없어서
 //       배포할 때 verify_jwt=false 로 두고, hook_secret 으로 확인한다.
 // 비밀값: GEMINI_API_KEY 는 Edge Function 시크릿(없으면 private.app_secrets 의 gemini_api_key),
@@ -43,6 +46,8 @@ Deno.serve(async (req) => {
     const hb = await req.json().catch(() => ({}));
     if (hb.action === "request-done") return json(await requestDone(db, String(hb.id || "")));
     if (hb.action === "content-added") return json(await contentAdded(db, hb));
+    if (hb.action === "claude-answered") return json(await claudeAnswered(db, String(hb.id || "")));
+    if (hb.action === "report-added") return json(await reportAdded(db, String(hb.id || "")));
     return json({ error: "unknown hook" }, 400);
   }
 
@@ -58,6 +63,7 @@ Deno.serve(async (req) => {
     if (body.action === "feedback") return json(await feedback(db, me as Member, String(body.id || "")));
     if (body.action === "request-posted") return json(await requestPosted(db, me as Member, String(body.id || "")));
     if (body.action === "comment-reply") return json(await commentReply(db, me as Member, String(body.id || "")));
+    if (body.action === "claude-requested") return json(await claudeRequested(db, me as Member, String(body.id || "")));
     if (body.action === "test-push") {
       const n = await pushTo(db, [email], { title: "알림 테스트", body: "이 기기로 알림이 잘 와요.", url: "/" }, body.endpoint ? String(body.endpoint) : undefined);
       return json({ ok: true, sent: n });
@@ -232,6 +238,30 @@ async function contentAdded(db: SupabaseClient, b: any) {
     tag: "content-" + b.kind,
   });
   return { ok: true, sent };
+}
+
+// ---------- Claude 정밀 검토 · 주간 리포트 ----------
+async function claudeRequested(db: SupabaseClient, me: Member, id: string) {
+  const { data: f } = await db.from("feedback_requests").select("id,author,target_type,target_id,claude_requested_at,claude_answered_at").eq("id", id).maybeSingle();
+  if (!f || f.author !== me.email || !f.claude_requested_at || f.claude_answered_at) return { ok: false };
+  const t = await loadTarget(db, f.target_type, f.target_id, me.email);
+  const n = await pushAdmins(db, me.email, { title: me.display_name + " 님이 Claude 정밀 검토를 요청했어요", body: (t ? short(t.source) + " · " : "") + "루틴이 곧 처리해요. 급하면 Claude에게 '피드백 확인해줘'.", url: "/", tag: "cr-" + id });
+  return { ok: true, sent: n };
+}
+async function claudeAnswered(db: SupabaseClient, id: string) {
+  const { data: f } = await db.from("feedback_requests").select("id,author,target_type,target_id,claude_verdict").eq("id", id).maybeSingle();
+  if (!f) return { ok: false };
+  const t = await loadTarget(db, f.target_type, f.target_id, f.author);
+  const tag = f.claude_verdict === "fixed" ? " (Gemini 설명을 바로잡았어요)" : f.claude_verdict === "ok" ? " (Gemini 설명도 맞아요 ✓)" : "";
+  const url = "/" + (f.target_type === "drill" ? "drills" : "sessions") + "?fb=" + f.id;
+  const n = await pushTo(db, [f.author], { title: "Claude 정밀 검토가 도착했어요" + tag, body: t ? short(t.source) : "", url, tag: "ca-" + id });
+  return { ok: true, sent: n };
+}
+async function reportAdded(db: SupabaseClient, id: string) {
+  const { data: r } = await db.from("weekly_reports").select("author,body").eq("id", id).maybeSingle();
+  if (!r) return { ok: false };
+  const n = await pushTo(db, [r.author], { title: "이번 주 번역 리포트가 도착했어요", body: short(r.body), url: "/drills?report=1", tag: "report-" + id });
+  return { ok: true, sent: n };
 }
 
 // ---------- 코멘트 답장 ----------

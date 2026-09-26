@@ -238,6 +238,9 @@ details.sess>summary::-webkit-details-marker{display:none}
 .fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .fb.done{display:grid;gap:6px;background:var(--en-soft);border-radius:10px;padding:12px 14px}
 .fb-body{white-space:pre-wrap;font-size:14px;line-height:1.65}
+.fb.done.claude{background:var(--ko-soft)}
+details.report{border-color:var(--en)}
+.past-report summary{cursor:pointer;font-size:13px;color:var(--muted)}
 .mistakes{margin:0;padding:0;list-style:none;display:grid;gap:10px}
 .mk-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
 .mk-wrong{text-decoration:line-through;text-decoration-color:var(--bad);color:var(--muted)}
@@ -260,6 +263,7 @@ details.sess>summary::-webkit-details-marker{display:none}
 .guide>summary::after{content:"펼치기";font-size:12px;font-weight:500;color:var(--muted)}
 .guide[open]>summary::after{content:"접기"}
 .guide .gbody{padding:0 18px 18px;display:grid;gap:14px;font-size:14px}
+details.add>.gbody{padding:0 16px 16px;display:grid;gap:10px}
 .guide p{margin:0}
 .guide ol{margin:0;padding-left:20px;display:grid;gap:8px}
 .guide .sts{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;margin:0}
@@ -374,7 +378,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -732,15 +736,29 @@ function modelHTML(model,lang,openKey,id){
 function fbBlock(type,id){
   if(!S.canWrite)return "";
   const f=S.feedback.find(x=>x.target_type===type&&x.target_id===id&&x.author===S.uid);
-  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">왜 틀렸는지 AI에게 묻기</button><span class="note">내 번역을 보고 틀린 곳과 더 나은 표현을 설명해 줘요.</span></div>';
-  if(!f.answered_at){
+  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">⚡ AI에게 바로 묻기</button><button class="btn small" data-action="fb-claude-new" data-type="'+type+'" data-id="'+esc(id)+'">🔍 Claude 정밀 검토</button>'+
+    '<span class="note">⚡ Gemini가 몇 초 만에 설명해요. 🔍 Claude가 더 깊게 봐요(하루 3번 답이 달려요).</span></div>';
+  let h="";
+  // ① Gemini 즉시 답
+  if(f.answered_at){
+    const who=f.by==="claude"?"Claude 피드백":"⚡ AI 피드백 (Gemini)";
+    h+='<div class="fb done"'+(f.seen_at?'':' data-fb-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">'+who+' <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div></div>';
+  }else if(!f.claude_requested_at){
     if(S.fbBusy.has(f.id))return '<div class="fb wait"><span class="chip">AI가 설명을 쓰는 중…</span></div>';
-    return '<div class="fb wait"><span class="chip">답변 대기 · '+esc(fmtTime(f.created_at))+'</span><span class="note">'+(f.error?'자동 답변이 안 됐어요('+esc(f.error)+'). 다시 시도하거나, 희주가 Claude에게 부탁하면 달려요.':'곧 설명이 달려요.')+'</span>'+
+    h+='<div class="fb wait"><span class="chip">답변 대기 · '+esc(fmtTime(f.created_at))+'</span><span class="note">'+(f.error?'자동 답변이 안 됐어요('+esc(f.error)+'). 다시 시도하거나 Claude 정밀 검토를 요청해 보세요.':'곧 설명이 달려요.')+'</span>'+
       '<button class="btn small" data-action="fb-retry" data-id="'+esc(f.id)+'">다시 시도</button><button class="link" data-action="fb-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
   }
-  const who=f.by==="claude"?"Claude 피드백":"AI 피드백 (Gemini)";
-  return '<div class="fb done"'+(f.seen_at?'':' data-fb-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">'+who+' <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div>'+
-    '<div class="row-actions"><button class="link" data-action="fb-again" data-id="'+esc(f.id)+'" data-type="'+type+'" data-tid="'+esc(id)+'">번역을 고쳤다면 다시 묻기</button></div></div>';
+  // ② Claude 정밀 검토
+  if(f.claude_answered_at){
+    const v=f.claude_verdict==="ok"?'<span class="chip done">Gemini 설명 검수 ✓</span>':f.claude_verdict==="fixed"?'<span class="chip bad">Gemini 설명을 바로잡았어요</span>':'';
+    h+='<div class="fb done claude"'+(f.claude_seen_at?'':' data-claude-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">🔍 Claude 정밀 검토 <span class="note">· '+esc(fmtTime(f.claude_answered_at))+'</span> '+v+'</p><div class="fb-body">'+esc(f.claude_answer)+'</div></div>';
+  }else if(f.claude_requested_at){
+    h+='<div class="fb wait"><span class="chip">🔍 Claude 정밀 검토 대기 · '+esc(fmtTime(f.claude_requested_at))+'</span><span class="note">오전 9시·오후 1시·밤 9시쯤 답이 달리고, 도착하면 알림이 가요.</span></div>';
+  }else if(f.answered_at&&f.by!=="claude"){
+    h+='<div class="fb"><button class="btn small" data-action="fb-claude" data-id="'+esc(f.id)+'">🔍 Claude 정밀 검토 요청</button><span class="note">더 깊게 보고, Gemini 설명이 맞는지도 확인해 줘요.</span></div>';
+  }
+  if(f.answered_at||f.claude_answered_at)h+='<div class="row-actions"><button class="link" data-action="fb-again" data-id="'+esc(f.id)+'" data-type="'+type+'" data-tid="'+esc(id)+'">번역을 고쳤다면 다시 묻기</button></div>';
+  return h;
 }
 async function callAssist(body){
   try{const {data,error}=await S.sb.functions.invoke("assist",{body});if(error)throw error;return data||{}}
@@ -755,6 +773,11 @@ async function runFeedback(id){
 }
 // 화면에 보인 답변은 읽음으로 표시한다(알림 배지가 줄어든다)
 function markSeenVisible(){
+  const now0=new Date().toISOString();
+  const cids=[...document.querySelectorAll("#panel [data-claude-unseen]")].map(e=>e.dataset.claudeUnseen);
+  if(cids.length&&S.sb){for(const f of S.feedback)if(cids.includes(f.id))f.claude_seen_at=now0;S.sb.from("feedback_requests").update({claude_seen_at:now0}).in("id",cids).then(()=>{})}
+  const rids=[...document.querySelectorAll("#panel [data-report-unseen]")].map(e=>e.dataset.reportUnseen);
+  if(rids.length&&S.sb){for(const r of S.reports)if(rids.includes(r.id))r.seen_at=now0;S.sb.from("weekly_reports").update({seen_at:now0}).in("id",rids).then(()=>{})}
   const dids=[...document.querySelectorAll("#panel [data-done-unseen]")].map(e=>e.dataset.doneUnseen);
   if(dids.length&&S.sb){const now=new Date().toISOString();for(const r of S.requests)if(dids.includes(r.id))r.done_seen_at=now;
     for(const d of dids)S.sb.from("requests").update({done_seen_at:now}).eq("id",d).then(()=>{});renderBell()}
@@ -769,7 +792,9 @@ function markSeenVisible(){
 /* ---------- notifications (🔔) ---------- */
 const doneUnseen=()=>S.requests.filter(r=>r.author===S.uid&&r.status==="done"&&!r.done_seen_at);
 const unseenFb=()=>S.feedback.filter(f=>f.author===S.uid&&f.answered_at&&!f.seen_at);
-const myPending=()=>S.feedback.filter(f=>f.author===S.uid&&!f.answered_at);
+const myPending=()=>S.feedback.filter(f=>f.author===S.uid&&((!f.answered_at&&!f.claude_requested_at)||(f.claude_requested_at&&!f.claude_answered_at)));
+const claudeUnseen=()=>S.feedback.filter(f=>f.author===S.uid&&f.claude_answered_at&&!f.claude_seen_at);
+const reportUnseen=()=>S.reports.filter(r=>r.author===S.uid&&!r.seen_at);
 const cut=(t,n)=>{t=String(t||"").replace(/\s+/g," ").trim();return t.length>n?t.slice(0,n-1)+"…":t};
 function targetLabel(type,id){
   if(type==="drill"){const d=S.drills.find(x=>x.id===id);return d?"번역 연습 · "+cut(d.source||d.ko,40):"번역 연습"}
@@ -778,24 +803,27 @@ function targetLabel(type,id){
 function renderBell(){
   const b=$("#bell");if(!b)return;
   const newReq=S.isAdmin?S.requests.filter(r=>r.status==="new").length:0;
-  const others=S.isAdmin?S.fbQueue.filter(q=>q.author!==S.uid&&!q.answered_at).length:0;
-  const n=unseenFb().length+doneUnseen().length+newReq+others,bd=b.querySelector(".tab-badge");
+  const others=S.isAdmin?S.fbQueue.filter(q=>q.author!==S.uid&&((!q.answered_at&&!q.claude_requested_at)||(q.claude_requested_at&&!q.claude_answered_at))).length:0;
+  const n=unseenFb().length+claudeUnseen().length+reportUnseen().length+doneUnseen().length+newReq+others,bd=b.querySelector(".tab-badge");
   bd.textContent=n;bd.hidden=!n;b.setAttribute("aria-expanded",String(S.notifOpen));
   const box=$("#notif");box.hidden=!S.notifOpen;if(!S.notifOpen)return;
   const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
   let h='<div class="notif-head"><h3>알림</h3><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
-  const un=unseenFb(),pend=myPending(),dn=doneUnseen();
+  const un=unseenFb(),pend=myPending(),dn=doneUnseen(),cu=claudeUnseen(),rp=reportUnseen();
+  if(rp.length)h+='<div class="sec"><p class="sub">이번 주 리포트</p><button class="nrow" data-action="report-open"><b>📋 '+esc(fmtDay(rp[0].week_of))+' 주 리포트</b><span class="note">'+esc(cut(rp[0].body,70))+'</span></button></div>';
+  if(cu.length)h+='<div class="sec"><p class="sub">🔍 Claude 정밀 검토 도착</p>'+
+    cu.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.claude_verdict==="fixed"?'Gemini 설명을 바로잡았어요 · ':f.claude_verdict==="ok"?'Gemini 설명 검수 ✓ · ':'')+esc(cut(f.claude_answer,60))+'</span></button>').join("")+'</div>';
   if(dn.length)h+='<div class="sec"><p class="sub">내 건의 완료</p>'+
     dn.map(r=>'<button class="nrow" data-action="req-done-open" data-id="'+esc(r.id)+'"><b>✓ '+esc(cut(r.title,40))+'</b><span class="note">'+esc(cut(r.claude_note||"처리 메모를 확인해 보세요.",70))+'</span></button>').join("")+'</div>';
   if(un.length)h+='<div class="sec"><p class="sub">피드백 답변 도착 <button class="link" data-action="fb-seen-all">모두 읽음</button></p>'+
     un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
   if(pend.length)h+='<div class="sec"><p class="sub">답변을 기다리는 내 요청</p>'+
-    pend.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
+    pend.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.claude_requested_at&&!f.claude_answered_at?'🔍 Claude 정밀 검토 대기 중':f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
   if(S.isAdmin){
     const q=S.fbQueue.filter(x=>x.author!==S.uid).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,8);
     const newR=S.requests.filter(r=>r.status==="new");
     if(newR.length)h+='<div class="sec"><p class="sub">새 건의 '+newR.length+'개</p><button class="nrow" data-action="goto-requests"><b>'+esc(cut(newR[0].title,40))+(newR.length>1?' 외 '+(newR.length-1)+'개':'')+'</b><span class="note">건의함에서 보기</span></button></div>';
-    if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(fmtTime(x.created_at))+' · '+(x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
+    if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(fmtTime(x.created_at))+' · '+(x.claude_requested_at&&!x.claude_answered_at?'🔍 Claude 정밀 검토 대기 → 루틴이 처리, 급하면 "피드백 확인해줘"':x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
   }
   if(h.endsWith('</button></div>')&&!h.includes('class="sec"'))h+='<p class="note" style="margin:0">새 알림이 없어요.</p>';
   const ps={on:"이 기기에서 휴대폰 알림을 받고 있어요.",off:"휴대폰 알림이 꺼져 있어요.",denied:"브라우저에서 알림이 차단돼 있어요. 브라우저 설정에서 이 사이트의 알림을 허용해 주세요.",
@@ -815,6 +843,7 @@ function openFeedback(id){
   const f=S.feedback.find(x=>x.id===id);S.notifOpen=false;
   if(!f){render();return}
   if(f.answered_at&&!f.seen_at){f.seen_at=new Date().toISOString();S.sb.from("feedback_requests").update({seen_at:f.seen_at}).eq("id",id).then(()=>{})}
+  if(f.claude_answered_at&&!f.claude_seen_at){f.claude_seen_at=new Date().toISOString();S.sb.from("feedback_requests").update({claude_seen_at:f.claude_seen_at}).eq("id",id).then(()=>{})}
   let sel;
   if(f.target_type==="drill"){
     const d=S.drills.find(x=>x.id===f.target_id);if(d){S.drillDir=d.dir||"KR→EN";S.drillTopic=d.topic;S.drillFilter="all"}
@@ -853,6 +882,16 @@ async function pushOff(){
     if(sub){await S.sb.from("push_subscriptions").delete().eq("endpoint",sub.endpoint);await sub.unsubscribe()}}catch(_){}
   S.pushState="off";render();flash("이 기기의 휴대폰 알림을 껐어요.");
 }
+// 주간 리포트: 매주 월요일 루틴이 내 오답 노트를 보고 쓴다. 최신 리포트를 위에, 지난 리포트는 아래에.
+function vReports(){
+  const list=S.reports.filter(r=>r.author===S.uid);
+  if(!list.length)return "";
+  const cur=list[0],open=S.open.has("reports")||!cur.seen_at;
+  return '<details class="add report" data-key="reports"'+(open?" open":"")+'><summary>📋 이번 주 리포트 · '+esc(fmtDay(cur.week_of))+' 주'+(cur.seen_at?'':' <span class="chip bad">새로 옴</span>')+'</summary><div class="gbody"'+(cur.seen_at?'':' data-report-unseen="'+esc(cur.id)+'"')+'>'+
+    '<div class="fb-body">'+esc(cur.body)+'</div>'+
+    (list.length>1?'<p class="sub" style="margin:8px 0 0">지난 리포트</p>'+list.slice(1).map(r=>'<details class="past-report"><summary>'+esc(fmtDay(r.week_of))+' 주</summary><div class="fb-body">'+esc(r.body)+'</div></details>').join(""):'')+
+    '</div></details>';
+}
 function vMistakes(){
   const list=S.mistakes.filter(m=>m.author===S.uid).sort((a,b)=>b.count-a.count||String(b.last_seen).localeCompare(String(a.last_seen)));
   const body=list.length?'<ol class="mistakes">'+list.map(m=>'<li><div class="mk-row"><span class="mk-wrong" lang="'+esc(m.lang)+'">'+esc(m.wrong)+'</span><span aria-hidden="true">→</span><span class="mk-better" lang="'+esc(m.lang)+'">'+esc(m.better)+'</span>'+(m.count>1?'<span class="chip bad">'+m.count+'번</span>':"")+'</div>'+(m.why?'<p class="note" style="margin:0">'+esc(m.why)+'</p>':"")+'</li>').join("")+'</ol>'
@@ -866,8 +905,8 @@ function vDrillGuide(){
       '<li><b>방향</b>을 골라요. 희주는 <b>한→영</b>, 혜림은 <b>영→한</b>이 먼저 열리지만, 다른 방향도 눌러서 풀 수 있어요.</li>'+
       '<li>주제를 고르고 <b>내 번역</b>을 써서 <b>제출</b>해요. 제출하면 잠기고, 고치려면 <b>수정</b>을 눌러요.</li>'+
       '<li>제출하면 <b>추천 표현</b>이 열려요. 상대도 제출했다면 상대 번역도 보여요.</li>'+
-      '<li>왜 틀렸는지 궁금하면 <b>왜 틀렸는지 AI에게 묻기</b>를 눌러요. 몇 초 뒤 설명이 달리고, 🔔 알림과 휴대폰 알림으로도 알려 줘요. 자동 답변이 안 되면 희주가 Claude에게 "피드백 확인해줘"라고 해서 채워요.</li>'+
-      '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요.</li>'+
+      '<li>왜 틀렸는지 궁금하면 두 가지로 물어볼 수 있어요. <b>⚡ AI에게 바로 묻기</b>는 Gemini가 몇 초 만에 답해요. <b>🔍 Claude 정밀 검토</b>는 Claude가 더 깊게 보고 Gemini 설명이 맞는지도 확인해요. 정밀 검토는 하루 3번(오전 9시·오후 1시·밤 9시쯤) 답이 달리고, 도착하면 알림이 가요.</li>'+
+      '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
     '</ol>'+
     '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
 }
@@ -875,21 +914,24 @@ function vDrills(){
   const members=Object.keys(S.names);
   const submitted=(id,who)=>S.drillStatus.some(x=>x.drill_id===id&&x.author===who);
   const lang=langOf(S.drillDir);
-  let h=vDrillGuide()+vMistakes();
+  let h=vDrillGuide()+vReports()+vMistakes();
   h+='<div class="rv-top"><div class="seg" role="group" aria-label="방향">'+
     DIRS.map(([k,l])=>'<button data-action="drill-dir" data-v="'+k+'" aria-pressed="'+(S.drillDir===k)+'">'+l+'</button>').join("")+'</div>'+
     '<div class="seg" role="group" aria-label="주제">'+
     TOPICS.map(([k,l])=>'<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+'</button>').join("")+'</div>'+
     '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
   const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
-    .sort((a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10))||a.sort-b.sort);  // 새로 올라온 묶음이 위로
+    .sort((a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10))||((b.for_author===S.uid)-(a.for_author===S.uid))||a.sort-b.sort);  // 새 묶음이 위로, 그 안에서 나를 위한 문장이 먼저
   if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":"표시할 문장이 없어요.")+'</div>';
   return h+list.map(d=>{
     const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
     const others=S.drillAns.filter(a=>a.drill_id===d.id&&a.author!==S.uid);
     const model=S.drillModels[d.id];
     const fresh=d.created_at&&Date.now()-new Date(d.created_at)<7*864e5;  // 1주 안에 올라온 문장
-    let c='<article class="card drill" id="drill-'+esc(d.id)+'"><p class="ctx">'+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
+    // 오답 노트로 만든 맞춤 문장: 나를 위한 것이면 무엇을 연습하는지 보여 준다
+    const forMe=d.for_author===S.uid,forOther=d.for_author&&!forMe;
+    const pchip=forMe?'<span class="chip bad">나를 위한 문장'+(d.focus?' · '+esc(d.focus):'')+'</span> ':forOther?'<span class="chip">'+esc((S.names[d.for_author]&&S.names[d.for_author].name)||"")+' 맞춤</span> ':'';
+    let c='<article class="card drill" id="drill-'+esc(d.id)+'"><p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
     if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
@@ -1158,6 +1200,18 @@ document.addEventListener("click",async e=>{
     await reload("feedback");runFeedback(data.id);
   }
   else if(a==="fb-retry"){runFeedback(id)}
+  else if(a==="fb-claude"){
+    const now=new Date().toISOString();
+    const r=await S.sb.from("feedback_requests").update({claude_requested_at:now}).eq("id",id);
+    if(r.error){flash("요청하지 못했어요.");return}
+    await reload("feedback");callAssist({action:"claude-requested",id});flash("Claude 정밀 검토를 요청했어요. 답이 달리면 알림이 가요.");
+  }
+  else if(a==="fb-claude-new"){
+    const {data,error}=await S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id,claude_requested_at:new Date().toISOString()}).select("id").single();
+    if(error){flash("요청하지 못했어요.");return}
+    await reload("feedback");callAssist({action:"claude-requested",id:data.id});flash("Claude 정밀 검토를 요청했어요. 답이 달리면 알림이 가요.");
+  }
+  else if(a==="report-open"){S.notifOpen=false;S.open.add("reports");setTab("drills")}
   else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
   else if(a==="fb-open"){openFeedback(id)}
   else if(a==="bell-close"){S.notifOpen=false;renderBell()}
@@ -1364,6 +1418,7 @@ const loaders={
   async feedback(){
     const [a,b]=await Promise.all([S.sb.from("feedback_requests").select("*"),S.sb.from("mistake_notes").select("*")]);
     S.feedback=a.error?[]:a.data;S.mistakes=b.error?[]:b.data;
+    {const {data:r,error}=await S.sb.from("weekly_reports").select("*").order("week_of",{ascending:false});S.reports=error?[]:(r||[])}
     if(S.isAdmin){const {data:q,error}=await S.sb.rpc("feedback_queue");S.fbQueue=error?[]:(q||[])}
   },
   async names(){
@@ -1374,7 +1429,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",weekly_reports:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
@@ -1403,7 +1458,7 @@ render();
     render();
     // 알림을 눌러 들어온 경우(/drills?fb=<요청 id>) 그 카드로 이동한다
     {const q=new URLSearchParams(location.search),fb=q.get("fb"),dn=q.get("done");
-     if(fb||dn)history.replaceState(null,"",location.pathname);if(fb)openFeedback(fb);else if(dn)openRequest(dn)}
+     if(fb||dn||q.get("report"))history.replaceState(null,"",location.pathname);if(fb)openFeedback(fb);else if(dn)openRequest(dn);else if(q.get("report")){S.open.add("reports");setTab("drills")}}
     // 서비스 워커는 알림을 받으려고만 쓴다(오프라인 캐시 없음)
     if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
     refreshPush().then(renderBell);

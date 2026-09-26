@@ -9,7 +9,8 @@ Claude Code 루틴이 이 문서를 읽고 그대로 실행해요. 사람이 고
 ```mermaid
 flowchart TD
   S[월요일 8:50 루틴 시작] --> R[기존 문장·진행 상황 읽기]
-  R --> D[번역 연습: 방향마다 12문장 작성·검수]
+  R --> D[번역 연습: 방향마다 12문장 작성·검수<br/>그중 사람마다 2~4문장은 오답 노트 맞춤]
+  R --> RP[주간 리포트: 사람마다 1개 → 알림]
   D --> I1[drills + drill_models 한 트랜잭션]
   R --> Q{교차번역 마지막 회차가<br/>10일 이상 지났나? 12회차 미만?}
   Q -->|예| X[다음 회차 원문 6개 + 추천 표현]
@@ -54,6 +55,35 @@ commit;
 ```
 작은따옴표는 `''`로 이스케이프해요.
 
+### 2-1. 맞춤 문장 (오답 노트 기반)
+24문장 가운데 **사람마다 2~4문장**은 그 사람의 실수 패턴을 겨냥해 써요. 위와 같은 트랜잭션, 같은 insert 문 안에 넣어요(알림이 한 번만 가요).
+- [ ] 오답 노트 읽기: `select m.display_name, n.author, n.lang, n.wrong, n.better, n.why, n.count, n.last_seen from mistake_notes n join members m on m.email = n.author order by n.author, n.count desc, n.last_seen desc;`
+- [ ] 사람마다 자주 틀린(count 높은 순)·최근 틀린 패턴 1~2개를 골라, 그 함정이 자연스럽게 들어간 **새 문장**을 써요. 틀렸던 문장을 그대로 다시 내지 않아요.
+- [ ] 방향은 그 사람의 기본 방향(위 표)으로 해요.
+- [ ] `for_author`에 그 사람 이메일(쿼리 결과의 `author`), `focus`에 연습 포인트 한 줄(예: `'~에 대한' 번역투`, `'meet'을 직역`). 화면에 "나를 위한 문장 · (focus)"로 보여요.
+- [ ] 오답 노트가 비어 있는 사람은 맞춤 문장 없이 보통 문장으로 채워요.
+
+```sql
+insert into public.drills (id, dir, topic, sort, context, source, for_author, focus) values
+  ('dr-20261005-ek-b3','EN→KR','business',3,'상황','원문','<author>','연습 포인트'), ...
+```
+(보통 문장과 한 insert로 묶으려면 모든 행에 `for_author`는 `null`, `focus`는 `''`로 채워요.)
+
+### 2-2. 주간 리포트
+- [ ] 오답 노트가 있는 사람마다 `weekly_reports`에 1개(`week_of` = 그 주 월요일, 한국 시간). 이미 있으면 건너뛰어요.
+- [ ] 이번 주 활동 수: `select author, count(*) from drill_answers where updated_at > now() - interval '7 days' group by 1;` / `select author, count(*) from feedback_requests where created_at > now() - interval '7 days' group by 1;`
+- [ ] 본문(해요체, 12줄 이내, 마크다운 기호 없이, 톤은 스타일 가이드):
+  1. 지난 한 주 요약 한 줄 (번역 수, 피드백 요청 수)
+  2. 자주 틀린 것 3가지: "내가 쓴 표현 → 더 나은 표현"과 한 줄 이유
+  3. 좋아진 점 한 가지 (최근 덜 틀린 패턴이 있으면)
+  4. "이번 주 번역 연습에 나를 위한 문장 N개를 넣었어요"
+- [ ] 넣으면 트리거가 그 사람에게 "이번 주 리포트" 휴대폰 알림을 보내요. 따로 보낼 필요 없어요.
+
+```sql
+insert into public.weekly_reports (author, week_of, body) values ('<author>', '2026-10-05', '...')
+on conflict (author, week_of) do nothing;
+```
+
 ## 3. 교차번역 (2주마다)
 - [ ] 가장 큰 `no`(회차)의 원문이 **한국 시간 기준 10일 이상 전**에 올라왔고 `no < 12`일 때만 다음 회차(`no + 1`)를 추가해요. 아니면 건너뛰어요. 모임 요일이 정해지면 이 규칙을 바꿔요.
 - [ ] 원문 6개: 난이도 `쉬움`·`보통`·`실전` × 방향 `KR→EN`·`EN→KR`.
@@ -85,5 +115,5 @@ commit;
 ## 4. 기록과 보고
 - [ ] 넣은 SQL을 `supabase/data/YYYYMMDD_weekly_content.sql`로 저장하고 `main`에 커밋·push해요(커밋 메시지: `Weekly content YYYY-MM-DD: 24 drills (+ session N)`).
 - [ ] 확인 쿼리: 새 id의 `drills`·`drill_models` 개수가 각각 24인지, 교차번역을 넣었으면 `sessions`·`session_models`가 6인지.
-- [ ] 마지막에 한국어로 짧게 보고해요: 넣은 개수, 교차번역 추가 여부(건너뛰었으면 이유), 두 사람의 진행 상황.
+- [ ] 마지막에 한국어로 짧게 보고해요: 넣은 개수(그중 맞춤 문장은 누구에게 몇 개), 주간 리포트를 받은 사람, 교차번역 추가 여부(건너뛰었으면 이유), 두 사람의 진행 상황.
 - 실패하면(커넥터 오류 등) 아무것도 반쯤 넣지 말고(트랜잭션 롤백) 무엇이 실패했는지 보고해요.
