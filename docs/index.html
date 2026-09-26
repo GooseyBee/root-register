@@ -196,7 +196,11 @@ details.sess>summary::-webkit-details-marker{display:none}
 .cmt .who{margin-bottom:0}
 .cmt-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin-bottom:2px}
 .cmt-time{font:12px var(--mono);color:var(--muted)}
-.cmt-acts{display:flex;gap:10px;align-items:center}
+.cmt-acts{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.like{border:0;background:none;padding:0;font:inherit;font-size:13px;color:var(--muted);cursor:pointer}
+.like.on{color:var(--ko);font-weight:650}
+.like:disabled{cursor:default}
+.like-who{font-size:12px;color:var(--muted)}
 .thread{display:grid;gap:6px}
 .replies{display:grid;gap:6px;margin-left:14px;padding-left:10px;border-left:2px solid var(--en-soft)}
 .reply-form{margin-left:14px}
@@ -370,7 +374,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -653,6 +657,13 @@ function favOnlyBtn(list){
 }
 // 코멘트 (모든 탭 공통): 날짜·시간을 표시하고, 코멘트마다 답장을 달 수 있다.
 // 답장은 한 단계만 들여 쓴다(답장에 답장하면 같은 스레드 아래에 붙는다. DB 트리거가 parent_id 를 맨 위 코멘트로 맞춘다).
+// 코멘트 좋아요: 누르면 켜고 다시 누르면 끈다. 누가 좋아했는지는 버튼에 마우스를 올리거나 길게 누르면 보인다.
+function likeBtn(c){
+  const who=S.cmtLikes.filter(l=>l.comment_id===c.id).map(l=>l.author),on=who.includes(S.uid);
+  const names=who.map(m=>m===S.uid?"나":((S.names[m]&&S.names[m].name)||String(m).split("@")[0])).join(", ");
+  return '<button class="like'+(on?" on":"")+'" data-action="cmt-like" data-id="'+esc(c.id)+'" aria-pressed="'+on+'" aria-label="좋아요'+(who.length?" "+who.length+"개":"")+'"'+(names?' title="'+esc(names)+' 좋아해요"':'')+(S.canWrite?'':' disabled')+'>'+(on?"♥":"♡")+(who.length?' '+who.length:'')+'</button>'+
+    (who.length?'<span class="like-who">'+esc(names)+'</span>':'');
+}
 function commentBlock(type,id){
   const cs=S.comments.filter(c=>c.target_type===type&&c.target_id===id);
   const k=fkey(type,id),open=S.cmtOpen.has(k);
@@ -662,7 +673,7 @@ function commentBlock(type,id){
   const tops=cs.filter(c=>!c.parent_id||!ids.has(c.parent_id)),kids=pid=>cs.filter(c=>c.parent_id===pid);
   const nm=m=>m===S.uid?"나":((S.names[m]&&S.names[m].name)||String(m).split("@")[0]);
   const one=(c,root,n)=>'<div class="cmt'+(c.id===root?'':' reply')+'"><div class="cmt-head">'+whoHTML(c.author)+'<time class="cmt-time" datetime="'+esc(c.created_at)+'">'+esc(fmtTime(c.created_at))+'</time></div>'+
-    '<p>'+esc(c.body)+'</p><div class="cmt-acts">'+(S.canWrite?'<button class="link" data-action="cmt-reply" data-id="'+esc(root)+'">답장</button>':"")+
+    '<p>'+esc(c.body)+'</p><div class="cmt-acts">'+likeBtn(c)+(S.canWrite?'<button class="link" data-action="cmt-reply" data-id="'+esc(root)+'">답장</button>':"")+
     (c.author===S.uid?askDel("삭제",{do:"del",col:"comments",id:c.id,what:"이 코멘트",extra:n?"답장 "+n+"개도 함께 지워져요.":""}):"")+'</div></div>';
   if(tops.length)h+='<div class="cmts">'+tops.map(t=>{const rs=kids(t.id);
     return '<div class="thread">'+one(t,t.id,rs.length)+(rs.length?'<div class="replies">'+rs.map(r=>one(r,t.id,0)).join("")+'</div>':"")+
@@ -1150,6 +1161,14 @@ document.addEventListener("click",async e=>{
   else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
   else if(a==="fb-open"){openFeedback(id)}
   else if(a==="bell-close"){S.notifOpen=false;renderBell()}
+  else if(a==="cmt-like"){
+    const on=S.cmtLikes.some(l=>l.comment_id===id&&l.author===S.uid);
+    // 먼저 화면에 반영하고(즉시 반응), 저장이 실패하면 되돌린다
+    if(on)S.cmtLikes=S.cmtLikes.filter(l=>!(l.comment_id===id&&l.author===S.uid));else S.cmtLikes.push({comment_id:id,author:S.uid});
+    render();
+    const r=on?await S.sb.from("comment_likes").delete().eq("comment_id",id).eq("author",S.uid):await S.sb.from("comment_likes").insert({comment_id:id});
+    if(r.error){flash("좋아요를 저장하지 못했어요.");reload("comments")}
+  }
   else if(a==="cmt-reply"){S.replyTo=id;render();const t=document.getElementById("r-"+id);if(t)t.focus()}
   else if(a==="cmt-reply-cancel"){clear(["r-"+S.replyTo]);S.replyTo=null;render()}
   else if(a==="req-done-open"){openRequest(id)}
@@ -1308,7 +1327,10 @@ const loaders={
     for(const r of [a,b,c])if(r.error)throw r.error;
     S.taglines=a.data.map(r=>({...r,addedBy:r.added_by,createdAt:T(r)}));S.briefs=b.data;S.copyStatus=c.data||[];
   },
-  async comments(){const {data,error}=await S.sb.from("comments").select("*").order("created_at");if(error)throw error;S.comments=data},
+  async comments(){
+    const [a,b]=await Promise.all([S.sb.from("comments").select("*").order("created_at"),S.sb.from("comment_likes").select("comment_id,author")]);
+    if(a.error)throw a.error;S.comments=a.data;S.cmtLikes=b.error?[]:(b.data||[]);
+  },
   async favorites(){const {data,error}=await S.sb.from("favorites").select("target_type,target_id");if(error)throw error;
     S.favs=new Set(data.map(r=>fkey(r.target_type,r.target_id)))},
   async daily(){
@@ -1340,7 +1362,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
