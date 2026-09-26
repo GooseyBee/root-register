@@ -193,7 +193,13 @@ details.sess>summary::-webkit-details-marker{display:none}
 .tl .brief{font-size:13px;color:var(--muted);margin:0}
 .cmts{display:grid;gap:8px;border-left:2px solid var(--line);padding-left:12px}
 .cmt{font-size:14px}
-.cmt .who{margin-bottom:2px}
+.cmt .who{margin-bottom:0}
+.cmt-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px;margin-bottom:2px}
+.cmt-time{font:12px var(--mono);color:var(--muted)}
+.cmt-acts{display:flex;gap:10px;align-items:center}
+.thread{display:grid;gap:6px}
+.replies{display:grid;gap:6px;margin-left:14px;padding-left:10px;border-left:2px solid var(--en-soft)}
+.reply-form{margin-left:14px}
 .cmt p{margin:0;white-space:pre-wrap}
 .cmt-form{display:flex;gap:8px}
 .cmt-form input{flex:1;min-width:0}
@@ -363,7 +369,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -644,13 +650,22 @@ function starBtn(type,id){
 function favOnlyBtn(list){
   return '<button class="link" data-action="fav-only" data-list="'+list+'">'+(S.favOnly[list]?"전체 보기":"★ 즐겨찾기만 보기")+'</button>';
 }
+// 코멘트 (모든 탭 공통): 날짜·시간을 표시하고, 코멘트마다 답장을 달 수 있다.
+// 답장은 한 단계만 들여 쓴다(답장에 답장하면 같은 스레드 아래에 붙는다. DB 트리거가 parent_id 를 맨 위 코멘트로 맞춘다).
 function commentBlock(type,id){
   const cs=S.comments.filter(c=>c.target_type===type&&c.target_id===id);
   const k=fkey(type,id),open=S.cmtOpen.has(k);
   let h='<button class="link" data-action="cmt-toggle" data-k="'+esc(k)+'">코멘트 '+cs.length+(open?" · 접기":"")+'</button>';
   if(!open)return h;
-  if(cs.length)h+='<div class="cmts">'+cs.map(c=>'<div class="cmt">'+whoHTML(c.author)+'<p>'+esc(c.body)+'</p>'+
-    (c.author===S.uid?(askDel("삭제",{do:"del",col:"comments",id:c.id,what:"이 코멘트"})):"")+'</div>').join("")+'</div>';
+  const ids=new Set(cs.map(c=>c.id));
+  const tops=cs.filter(c=>!c.parent_id||!ids.has(c.parent_id)),kids=pid=>cs.filter(c=>c.parent_id===pid);
+  const nm=m=>m===S.uid?"나":((S.names[m]&&S.names[m].name)||String(m).split("@")[0]);
+  const one=(c,root,n)=>'<div class="cmt'+(c.id===root?'':' reply')+'"><div class="cmt-head">'+whoHTML(c.author)+'<time class="cmt-time" datetime="'+esc(c.created_at)+'">'+esc(fmtTime(c.created_at))+'</time></div>'+
+    '<p>'+esc(c.body)+'</p><div class="cmt-acts">'+(S.canWrite?'<button class="link" data-action="cmt-reply" data-id="'+esc(root)+'">답장</button>':"")+
+    (c.author===S.uid?askDel("삭제",{do:"del",col:"comments",id:c.id,what:"이 코멘트",extra:n?"답장 "+n+"개도 함께 지워져요.":""}):"")+'</div></div>';
+  if(tops.length)h+='<div class="cmts">'+tops.map(t=>{const rs=kids(t.id);
+    return '<div class="thread">'+one(t,t.id,rs.length)+(rs.length?'<div class="replies">'+rs.map(r=>one(r,t.id,0)).join("")+'</div>':"")+
+      (S.canWrite&&S.replyTo===t.id?'<form class="cmt-form reply-form" data-form="comment" data-type="'+type+'" data-id="'+esc(id)+'" data-parent="'+esc(t.id)+'"><input type="text" id="r-'+esc(t.id)+'" placeholder="'+esc(nm(t.author))+'에게 답장" aria-label="답장"><button class="btn small" type="submit">답장</button><button class="link" type="button" data-action="cmt-reply-cancel">취소</button></form>':"")+'</div>'}).join("")+'</div>';
   if(S.canWrite){const iid="c-"+type+"-"+id;h+='<form class="cmt-form" data-form="comment" data-type="'+type+'" data-id="'+esc(id)+'"><input type="text" id="'+esc(iid)+'" placeholder="코멘트 남기기" aria-label="코멘트"><button class="btn small" type="submit">남기기</button></form>'}
   return h;
 }
@@ -728,6 +743,9 @@ async function runFeedback(id){
 }
 // 화면에 보인 답변은 읽음으로 표시한다(알림 배지가 줄어든다)
 function markSeenVisible(){
+  const dids=[...document.querySelectorAll("#panel [data-done-unseen]")].map(e=>e.dataset.doneUnseen);
+  if(dids.length&&S.sb){const now=new Date().toISOString();for(const r of S.requests)if(dids.includes(r.id))r.done_seen_at=now;
+    for(const d of dids)S.sb.from("requests").update({done_seen_at:now}).eq("id",d).then(()=>{});renderBell()}
   const ids=[...document.querySelectorAll("#panel [data-fb-unseen]")].map(e=>e.dataset.fbUnseen);
   if(!ids.length||!S.sb)return;
   const now=new Date().toISOString();
@@ -737,6 +755,7 @@ function markSeenVisible(){
 }
 
 /* ---------- notifications (🔔) ---------- */
+const doneUnseen=()=>S.requests.filter(r=>r.author===S.uid&&r.status==="done"&&!r.done_seen_at);
 const unseenFb=()=>S.feedback.filter(f=>f.author===S.uid&&f.answered_at&&!f.seen_at);
 const myPending=()=>S.feedback.filter(f=>f.author===S.uid&&!f.answered_at);
 const cut=(t,n)=>{t=String(t||"").replace(/\s+/g," ").trim();return t.length>n?t.slice(0,n-1)+"…":t};
@@ -748,12 +767,14 @@ function renderBell(){
   const b=$("#bell");if(!b)return;
   const newReq=S.isAdmin?S.requests.filter(r=>r.status==="new").length:0;
   const others=S.isAdmin?S.fbQueue.filter(q=>q.author!==S.uid&&!q.answered_at).length:0;
-  const n=unseenFb().length+newReq+others,bd=b.querySelector(".tab-badge");
+  const n=unseenFb().length+doneUnseen().length+newReq+others,bd=b.querySelector(".tab-badge");
   bd.textContent=n;bd.hidden=!n;b.setAttribute("aria-expanded",String(S.notifOpen));
   const box=$("#notif");box.hidden=!S.notifOpen;if(!S.notifOpen)return;
   const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
   let h='<div class="notif-head"><h3>알림</h3><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
-  const un=unseenFb(),pend=myPending();
+  const un=unseenFb(),pend=myPending(),dn=doneUnseen();
+  if(dn.length)h+='<div class="sec"><p class="sub">내 건의 완료</p>'+
+    dn.map(r=>'<button class="nrow" data-action="req-done-open" data-id="'+esc(r.id)+'"><b>✓ '+esc(cut(r.title,40))+'</b><span class="note">'+esc(cut(r.claude_note||"처리 메모를 확인해 보세요.",70))+'</span></button>').join("")+'</div>';
   if(un.length)h+='<div class="sec"><p class="sub">피드백 답변 도착 <button class="link" data-action="fb-seen-all">모두 읽음</button></p>'+
     un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
   if(pend.length)h+='<div class="sec"><p class="sub">답변을 기다리는 내 요청</p>'+
@@ -769,8 +790,14 @@ function renderBell(){
     "ios-home":"아이폰은 Safari 공유 버튼 → '홈 화면에 추가'를 한 뒤, 홈 화면 아이콘으로 열어서 켜 주세요.",unsupported:"이 브라우저는 휴대폰 알림을 지원하지 않아요.",unknown:"알림 상태를 확인하는 중이에요."}[S.pushState]||"";
   h+='<div class="sec"><p class="sub">휴대폰 알림</p><div class="push-row"><span class="note">'+ps+'</span>'+
     (S.pushState==="off"?'<button class="btn small primary" data-action="push-on">켜기</button>':S.pushState==="on"?'<button class="btn small" data-action="push-test">테스트</button><button class="link" data-action="push-off">끄기</button>':'')+'</div>'+
-    '<p class="note" style="margin:0">'+(S.isAdmin?'새 건의, 상대의 피드백 요청, 자동 답변 실패, 내 피드백 답변을 알려 드려요.':'내 피드백 답변이 달리면 알려 드려요.')+'</p></div>';
+    '<p class="note" style="margin:0">'+(S.isAdmin?'새 건의, 상대의 피드백 요청, 자동 답변 실패, 내 피드백 답변, 답장, 내 건의 완료를 알려 드려요.':'내 피드백 답변, 내 코멘트에 달린 답장, 내 건의 완료를 알려 드려요.')+'</p></div>';
   box.innerHTML=h;
+}
+// 내 건의(완료 알림)로 이동: 완료 목록을 열고 카드로 스크롤, 읽음 표시
+function openRequest(id){
+  S.notifOpen=false;S.reqFilter="all";S.favOnly.requests=false;
+  setTab("requests");
+  requestAnimationFrame(()=>{const el=document.getElementById("req-"+id);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})});
 }
 function openFeedback(id){
   const f=S.feedback.find(x=>x.id===id);S.notifOpen=false;
@@ -932,7 +959,7 @@ function vRequests(){
   if(!list.length)return h+'<div class="empty">'+(S.reqFilter==="open"?"진행 중인 건의가 없어요. 바꾸고 싶은 점이 있으면 올려 주세요.":"표시할 건의가 없어요.")+'</div>';
   return h+list.map(r=>{
     const mine=r.author===S.uid,editing=S.reqEdit===r.id;
-    let c='<article class="card req"><div class="meta"><span class="chip st-'+esc(r.status)+'">'+esc(STATUS[r.status]||r.status)+'</span><span class="chip">'+esc(r.kind)+'</span>'+whoHTML(r.author)+'<span class="sdate" title="올린 시각">'+esc(fmtTime(r.created_at))+'</span>'+(r.updated_at&&new Date(r.updated_at)-new Date(r.created_at)>60000?'<span class="note">· 수정 '+esc(fmtTime(r.updated_at))+'</span>':"")+'</div>';
+    let c='<article class="card req" id="req-'+esc(r.id)+'"'+(mine&&r.status==="done"&&!r.done_seen_at?' data-done-unseen="'+esc(r.id)+'"':'')+'><div class="meta"><span class="chip st-'+esc(r.status)+'">'+esc(STATUS[r.status]||r.status)+'</span><span class="chip">'+esc(r.kind)+'</span>'+whoHTML(r.author)+'<span class="sdate" title="올린 시각">'+esc(fmtTime(r.created_at))+'</span>'+(r.updated_at&&new Date(r.updated_at)-new Date(r.created_at)>60000?'<span class="note">· 수정 '+esc(fmtTime(r.updated_at))+'</span>':"")+'</div>';
     if(editing){
       c+='<label class="f">제목<input type="text" id="qe-title-'+esc(r.id)+'" value="'+esc(r.title)+'"></label>'+
         '<label class="f">종류<select id="qe-kind-'+esc(r.id)+'">'+opt(KINDS,r.kind)+'</select></label>'+
@@ -1048,8 +1075,12 @@ async function onSubmit(form){
     const name=val("n-name");if(!name)return;
     if(await write(()=>S.sb.from("name_candidates").insert({name,gloss:val("n-gloss"),why:val("n-why"),shown:true}),"후보를 추가했어요: ‘"+name+"’"))clear(["n-name","n-gloss","n-why"]);
   }else if(kind==="comment"){
-    const type=form.dataset.type,id=form.dataset.id,iid="c-"+type+"-"+id,text=val(iid);if(!text)return;
-    if(await write(()=>S.sb.from("comments").insert({target_type:type,target_id:id,body:text})))clear([iid]);
+    const type=form.dataset.type,id=form.dataset.id,parent=form.dataset.parent||null,iid=parent?"r-"+parent:"c-"+type+"-"+id,text=val(iid);if(!text)return;
+    let newId=null;
+    if(await write(async()=>{const r=await S.sb.from("comments").insert({target_type:type,target_id:id,body:text,parent_id:parent}).select("id").single();newId=r.data&&r.data.id;return r})){
+      clear([iid]);
+      if(parent){S.replyTo=null;if(newId)callAssist({action:"comment-reply",id:newId})}  // 답장 알림(푸시)
+    }
   }
   document.activeElement&&document.activeElement.blur&&document.activeElement.blur();
   render();
@@ -1114,6 +1145,9 @@ document.addEventListener("click",async e=>{
   else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
   else if(a==="fb-open"){openFeedback(id)}
   else if(a==="bell-close"){S.notifOpen=false;renderBell()}
+  else if(a==="cmt-reply"){S.replyTo=id;render();const t=document.getElementById("r-"+id);if(t)t.focus()}
+  else if(a==="cmt-reply-cancel"){clear(["r-"+S.replyTo]);S.replyTo=null;render()}
+  else if(a==="req-done-open"){openRequest(id)}
   else if(a==="fb-seen-all"){const ids=unseenFb().map(f=>f.id),now=new Date().toISOString();for(const f of S.feedback)if(ids.includes(f.id))f.seen_at=now;if(ids.length)S.sb.from("feedback_requests").update({seen_at:now}).in("id",ids).then(()=>{});renderBell()}
   else if(a==="goto-requests"){S.notifOpen=false;S.reqFilter="open";setTab("requests")}
   else if(a==="push-on"){pushOn()}
@@ -1329,7 +1363,8 @@ render();
     if(location.pathname!==tabUrl(S.tab)||location.hash)history.replaceState(null,"",tabUrl(S.tab)+location.search);
     render();
     // 알림을 눌러 들어온 경우(/drills?fb=<요청 id>) 그 카드로 이동한다
-    {const fb=new URLSearchParams(location.search).get("fb");if(fb){history.replaceState(null,"",location.pathname);openFeedback(fb)}}
+    {const q=new URLSearchParams(location.search),fb=q.get("fb"),dn=q.get("done");
+     if(fb||dn)history.replaceState(null,"",location.pathname);if(fb)openFeedback(fb);else if(dn)openRequest(dn)}
     // 서비스 워커는 알림을 받으려고만 쓴다(오프라인 캐시 없음)
     if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
     refreshPush().then(renderBell);

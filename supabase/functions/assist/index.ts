@@ -3,6 +3,11 @@
 //   { action: "feedback", id }        → 내 피드백 요청에 Gemini가 설명을 달고, 오답 노트를 갱신하고, 푸시를 보낸다
 //   { action: "request-posted", id }  → 새 건의가 올라왔다고 관리자(희주)에게 푸시
 //   { action: "test-push" }           → 내 기기로 테스트 푸시
+//   { action: "comment-reply", id }   → 내 답장을 원래 코멘트 쓴 사람에게 푸시
+// DB 트리거(pg_net)가 x-hook-secret 헤더로 부른다:
+//   { action: "request-done", id }    → 건의가 완료되면 올린 사람에게 푸시
+// 인증: 사용자 호출은 함수 안에서 토큰을 확인한다(getUser + members). 트리거 호출은 JWT가 없어서
+//       배포할 때 verify_jwt=false 로 두고, hook_secret 으로 확인한다.
 // 비밀값: GEMINI_API_KEY 는 Edge Function 시크릿(없으면 private.app_secrets 의 gemini_api_key),
 //         VAPID 키는 private.app_secrets 에서 읽는다. 요금: Google 프로젝트에 결제를 연결하지 않으면 무료 한도를 넘어도 과금되지 않고 429 로 실패한다.
 import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
@@ -30,6 +35,15 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method" }, 405);
   const db = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
+  const hook = req.headers.get("x-hook-secret");
+  if (hook) {
+    const expected = await secret(db, "hook_secret");
+    if (!expected || hook !== expected) return json({ error: "bad hook" }, 401);
+    const hb = await req.json().catch(() => ({}));
+    if (hb.action === "request-done") return json(await requestDone(db, String(hb.id || "")));
+    return json({ error: "unknown hook" }, 400);
+  }
+
   const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const { data: u } = await db.auth.getUser(token);
   const email = u?.user?.email?.toLowerCase();
@@ -41,6 +55,7 @@ Deno.serve(async (req) => {
   try {
     if (body.action === "feedback") return json(await feedback(db, me as Member, String(body.id || "")));
     if (body.action === "request-posted") return json(await requestPosted(db, me as Member, String(body.id || "")));
+    if (body.action === "comment-reply") return json(await commentReply(db, me as Member, String(body.id || "")));
     if (body.action === "test-push") {
       const n = await pushTo(db, [email], { title: "알림이 켜졌어요", body: "피드백 답변과 새 소식을 이 기기로 알려 드릴게요.", url: "/" });
       return json({ ok: true, sent: n });
@@ -192,6 +207,27 @@ async function requestPosted(db: SupabaseClient, me: Member, id: string) {
   const { data: r } = await db.from("requests").select("title,author").eq("id", id).maybeSingle();
   if (!r || r.author !== me.email) return { ok: false };
   const n = await pushAdmins(db, me.email, { title: "새 건의: " + me.display_name, body: short(r.title), url: "/requests", tag: "req-" + id });
+  return { ok: true, sent: n };
+}
+
+async function requestDone(db: SupabaseClient, id: string) {
+  const { data: r } = await db.from("requests").select("title,author,status,claude_note").eq("id", id).maybeSingle();
+  if (!r || r.status !== "done") return { ok: false };
+  const n = await pushTo(db, [r.author], { title: "건의가 완료됐어요 ✓", body: short(r.title) + (r.claude_note ? " · " + short(r.claude_note) : ""), url: "/requests?done=" + id, tag: "done-" + id });
+  return { ok: true, sent: n };
+}
+
+// ---------- 코멘트 답장 ----------
+const PATH: Record<string, string> = { term: "/terms", session: "/sessions", tagline: "/taglines", daily: "/", drill: "/drills", request: "/requests" };
+async function commentReply(db: SupabaseClient, me: Member, id: string) {
+  const { data: c } = await db.from("comments").select("id,author,body,parent_id,target_type").eq("id", id).maybeSingle();
+  if (!c || c.author !== me.email || !c.parent_id) return { ok: false };
+  const { data: p } = await db.from("comments").select("author").eq("id", c.parent_id).maybeSingle();
+  // 원래 코멘트 쓴 사람 + 같은 스레드에 답장한 사람(나 제외)
+  const { data: rs } = await db.from("comments").select("author").eq("parent_id", c.parent_id);
+  const to = [...new Set([p?.author, ...(rs || []).map((x) => x.author)].filter((e) => e && e !== me.email))] as string[];
+  if (!to.length) return { ok: true, sent: 0 };
+  const n = await pushTo(db, to, { title: me.display_name + " 님이 답장했어요", body: short(c.body), url: PATH[c.target_type] || "/", tag: "reply-" + c.parent_id });
   return { ok: true, sent: n };
 }
 
