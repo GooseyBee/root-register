@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Root &amp; Register</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%233E63DD%22/%3E%3Ctext x=%2216%22 y=%2223%22 font-size=%2220%22 text-anchor=%22middle%22 fill=%22%23FFFFFF%22 font-family=%22serif%22%3E%26%3C/text%3E%3C/svg%3E">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta name="theme-color" content="#3E63DD">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="R&amp;R">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=JetBrains+Mono:wght@500&display=swap">
@@ -53,6 +58,18 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .brand p{margin:2px 0 0;color:var(--muted);font-size:13px}
 .me{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted)}
 .me img{width:26px;height:26px;border-radius:50%}
+.bell-wrap{position:relative}
+.bell{position:relative;border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:999px;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px}
+.bell .tab-badge{position:absolute;top:-4px;right:-4px}
+.notif{position:absolute;right:0;top:calc(100% + 8px);z-index:30;width:min(360px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:14px;display:grid;gap:12px;color:var(--ink);font-size:14px}
+.notif h3{margin:0;font:700 15px var(--sans)}
+.notif .sec{display:grid;gap:6px}
+.notif .sec>p.sub{margin:0}
+.nrow{display:grid;gap:2px;text-align:left;border:1px solid var(--line);background:var(--bg);border-radius:10px;padding:8px 10px;color:var(--ink);font:inherit;cursor:pointer;width:100%}
+.nrow.static{cursor:default}
+.nrow b{font-weight:650}
+.nrow .note{font-size:12px}
+.push-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .stats{display:flex;flex-wrap:wrap;gap:8px;font:500 12px/1.4 var(--sans);color:var(--muted);padding-bottom:6px}
 .stats span{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
 .stats b{color:var(--en);font-weight:700;font-variant-numeric:tabular-nums}
@@ -331,6 +348,7 @@ if(!SHOW_NAMING){TABS.splice(TABS.indexOf("names"),1);document.querySelector('#t
 const KINDS=["기능 추가","수정·버그","콘텐츠","디자인","기타"];
 const STATUS={new:"새 건의",reviewing:"검토 중",planned:"예정",in_progress:"작업 중",done:"완료",declined:"보류"};
 const OPEN_ST=["new","reviewing","planned","in_progress"];
+const VAPID_PUBLIC="BLINzXyS2JloJ9rFebqtBe_VSPGSTaVQaCb8JhSWYlA7Z0E635MdQ-hQjqRNXzFzds4tIiS_nEhrlyHiDxRqFA8"; // 웹 푸시 공개 키(비공개 키는 DB private 스키마)
 const DIRS=[["KR→EN","한→영"],["EN→KR","영→한"]];
 const langOf=dir=>dir==="EN→KR"?"ko":"en";  // 번역문(내 답·추천 표현)의 언어
 const TOPICS=[["marketing","마케팅·광고"],["business","비즈니스·이메일"],["daily","일상 회화"],["travel","여행 표현"]];
@@ -339,7 +357,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -411,6 +429,7 @@ function renderStats(){
   $("#stats").innerHTML=
     '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>교차번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>카피 <b>'+S.taglines.filter(t=>t.addedBy===S.uid).length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
+  renderBell();
   {const n=S.requests.filter(r=>r.status==="new").length,bd=$("#req-badge");if(bd){bd.textContent=n;bd.hidden=!n;bd.title="새 건의 "+n+"개"}}
 }
 function render(){
@@ -430,6 +449,7 @@ function render(){
     h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests,names:vNames})[S.tab]();
   }
   $("#panel").innerHTML=h;
+  if(S.dbState==="ready")markSeenVisible();
   for(const [id,v] of S.dirty){const el=document.getElementById(id);if(el)el.value=v}
   resolveNames();
 }
@@ -674,15 +694,119 @@ function modelHTML(model,lang,openKey,id){
     ((model.notes||[]).length?'<p class="sub" style="margin:0">포인트</p><dl class="dwords">'+model.notes.map(n=>'<dt>'+esc(n.phrase)+'</dt><dd>'+esc(n.why)+'</dd>').join("")+'</dl>':"")+
     '<div><button class="link" data-action="model-toggle" data-k="'+esc(openKey)+'">접기</button></div></div>';
 }
-// 내 번역에 대한 Claude 피드백: 요청 → 대기 → 답변. 앱은 AI를 부르지 않고, 희주가 "피드백 확인해줘"라고 하면 Claude가 답을 단다.
+// 내 번역에 대한 AI 피드백: 요청하면 Edge Function(assist)이 Gemini 무료 API로 바로 설명을 단다.
+// 자동 답변이 실패하면 요청이 남아 있고, 희주가 Claude에게 "피드백 확인해줘"라고 하면 Claude가 단다.
 function fbBlock(type,id){
   if(!S.canWrite)return "";
   const f=S.feedback.find(x=>x.target_type===type&&x.target_id===id&&x.author===S.uid);
-  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">왜 틀렸는지 Claude에게 묻기</button><span class="note">내 번역을 보고 틀린 곳과 더 나은 표현을 설명해 줘요.</span></div>';
-  if(!f.answered_at)return '<div class="fb wait"><span class="chip">피드백 요청함 · '+esc(fmtTime(f.created_at))+'</span><span class="note">희주가 Claude에게 피드백 확인을 부탁하면 여기에 설명이 달려요.</span>'+
-    '<button class="link" data-action="fb-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
-  return '<div class="fb done"><p class="sub" style="margin:0">Claude 피드백 <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div>'+
+  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">왜 틀렸는지 AI에게 묻기</button><span class="note">내 번역을 보고 틀린 곳과 더 나은 표현을 설명해 줘요.</span></div>';
+  if(!f.answered_at){
+    if(S.fbBusy.has(f.id))return '<div class="fb wait"><span class="chip">AI가 설명을 쓰는 중…</span></div>';
+    return '<div class="fb wait"><span class="chip">답변 대기 · '+esc(fmtTime(f.created_at))+'</span><span class="note">'+(f.error?'자동 답변이 안 됐어요('+esc(f.error)+'). 다시 시도하거나, 희주가 Claude에게 부탁하면 달려요.':'곧 설명이 달려요.')+'</span>'+
+      '<button class="btn small" data-action="fb-retry" data-id="'+esc(f.id)+'">다시 시도</button><button class="link" data-action="fb-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
+  }
+  const who=f.by==="claude"?"Claude 피드백":"AI 피드백 (Gemini)";
+  return '<div class="fb done"'+(f.seen_at?'':' data-fb-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">'+who+' <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div>'+
     '<div class="row-actions"><button class="link" data-action="fb-again" data-id="'+esc(f.id)+'" data-type="'+type+'" data-tid="'+esc(id)+'">번역을 고쳤다면 다시 묻기</button></div></div>';
+}
+async function callAssist(body){
+  try{const {data,error}=await S.sb.functions.invoke("assist",{body});if(error)throw error;return data||{}}
+  catch(e){return {error:String(e&&e.message||e)}}
+}
+async function runFeedback(id){
+  S.fbBusy.add(id);render();
+  const r=await callAssist({action:"feedback",id});
+  S.fbBusy.delete(id);await reload("feedback");
+  if(r.status==="answered")flash("피드백이 도착했어요.");
+  else flash("자동 답변이 안 됐어요. "+(r.error||"잠시 뒤 다시 시도해 주세요."));
+}
+// 화면에 보인 답변은 읽음으로 표시한다(알림 배지가 줄어든다)
+function markSeenVisible(){
+  const ids=[...document.querySelectorAll("#panel [data-fb-unseen]")].map(e=>e.dataset.fbUnseen);
+  if(!ids.length||!S.sb)return;
+  const now=new Date().toISOString();
+  for(const f of S.feedback)if(ids.includes(f.id))f.seen_at=now;
+  S.sb.from("feedback_requests").update({seen_at:now}).in("id",ids).then(()=>{});
+  renderBell();
+}
+
+/* ---------- notifications (🔔) ---------- */
+const unseenFb=()=>S.feedback.filter(f=>f.author===S.uid&&f.answered_at&&!f.seen_at);
+const myPending=()=>S.feedback.filter(f=>f.author===S.uid&&!f.answered_at);
+const cut=(t,n)=>{t=String(t||"").replace(/\s+/g," ").trim();return t.length>n?t.slice(0,n-1)+"…":t};
+function targetLabel(type,id){
+  if(type==="drill"){const d=S.drills.find(x=>x.id===id);return d?"번역 연습 · "+cut(d.source||d.ko,40):"번역 연습"}
+  const s=S.sessions.find(x=>x.id===id);return s?"교차번역 · "+s.no+"회차 "+cut(s.title,30):"교차번역";
+}
+function renderBell(){
+  const b=$("#bell");if(!b)return;
+  const newReq=S.isAdmin?S.requests.filter(r=>r.status==="new").length:0;
+  const others=S.isAdmin?S.fbQueue.filter(q=>q.author!==S.uid&&!q.answered_at).length:0;
+  const n=unseenFb().length+newReq+others,bd=b.querySelector(".tab-badge");
+  bd.textContent=n;bd.hidden=!n;b.setAttribute("aria-expanded",String(S.notifOpen));
+  const box=$("#notif");box.hidden=!S.notifOpen;if(!S.notifOpen)return;
+  const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
+  let h='<h3>알림</h3>';
+  const un=unseenFb(),pend=myPending();
+  if(un.length)h+='<div class="sec"><p class="sub">피드백 답변 도착 <button class="link" data-action="fb-seen-all">모두 읽음</button></p>'+
+    un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
+  if(pend.length)h+='<div class="sec"><p class="sub">답변을 기다리는 내 요청</p>'+
+    pend.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
+  if(S.isAdmin){
+    const q=S.fbQueue.filter(x=>x.author!==S.uid).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,8);
+    const newR=S.requests.filter(r=>r.status==="new");
+    if(newR.length)h+='<div class="sec"><p class="sub">새 건의 '+newR.length+'개</p><button class="nrow" data-action="goto-requests"><b>'+esc(cut(newR[0].title,40))+(newR.length>1?' 외 '+(newR.length-1)+'개':'')+'</b><span class="note">건의함에서 보기</span></button></div>';
+    if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(fmtTime(x.created_at))+' · '+(x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
+  }
+  if(h==='<h3>알림</h3>')h+='<p class="note" style="margin:0">새 알림이 없어요.</p>';
+  const ps={on:"이 기기에서 휴대폰 알림을 받고 있어요.",off:"휴대폰 알림이 꺼져 있어요.",denied:"브라우저에서 알림이 차단돼 있어요. 브라우저 설정에서 이 사이트의 알림을 허용해 주세요.",
+    "ios-home":"아이폰은 Safari 공유 버튼 → '홈 화면에 추가'를 한 뒤, 홈 화면 아이콘으로 열어서 켜 주세요.",unsupported:"이 브라우저는 휴대폰 알림을 지원하지 않아요.",unknown:"알림 상태를 확인하는 중이에요."}[S.pushState]||"";
+  h+='<div class="sec"><p class="sub">휴대폰 알림</p><div class="push-row"><span class="note">'+ps+'</span>'+
+    (S.pushState==="off"?'<button class="btn small primary" data-action="push-on">켜기</button>':S.pushState==="on"?'<button class="btn small" data-action="push-test">테스트</button><button class="link" data-action="push-off">끄기</button>':'')+'</div>'+
+    '<p class="note" style="margin:0">'+(S.isAdmin?'새 건의, 상대의 피드백 요청, 자동 답변 실패, 내 피드백 답변을 알려 드려요.':'내 피드백 답변이 달리면 알려 드려요.')+'</p></div>';
+  box.innerHTML=h;
+}
+function openFeedback(id){
+  const f=S.feedback.find(x=>x.id===id);S.notifOpen=false;
+  if(!f){render();return}
+  if(f.answered_at&&!f.seen_at){f.seen_at=new Date().toISOString();S.sb.from("feedback_requests").update({seen_at:f.seen_at}).eq("id",id).then(()=>{})}
+  let sel;
+  if(f.target_type==="drill"){
+    const d=S.drills.find(x=>x.id===f.target_id);if(d){S.drillDir=d.dir||"KR→EN";S.drillTopic=d.topic;S.drillFilter="all"}
+    setTab("drills");sel="#drill-"+CSS.escape(f.target_id);
+  }else{
+    S.sessLevel="all";S.favOnly.sessions=false;S.open.add("sess-"+f.target_id);S.open.add("touched-sess");
+    setTab("sessions");sel='[data-key="sess-'+CSS.escape(f.target_id)+'"]';
+  }
+  requestAnimationFrame(()=>{const el=document.querySelector(sel);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})});
+}
+/* ---------- web push ---------- */
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const standalone=(window.matchMedia&&matchMedia("(display-mode: standalone)").matches)||navigator.standalone===true;
+function b64u8(s){const p="=".repeat((4-s.length%4)%4),b=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(b,c=>c.charCodeAt(0))}
+async function refreshPush(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)||!("Notification" in window)){S.pushState=isIOS&&!standalone?"ios-home":"unsupported";return}
+  try{const reg=await navigator.serviceWorker.getRegistration("/");const sub=reg&&await reg.pushManager.getSubscription();
+    S.pushState=sub?"on":(Notification.permission==="denied"?"denied":"off")}catch(_){S.pushState="off"}
+}
+async function pushOn(){
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted"){S.pushState="denied";render();return}
+    const reg=await navigator.serviceWorker.register("/sw.js");await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u8(VAPID_PUBLIC)});
+    const j=sub.toJSON();
+    const {error}=await S.sb.from("push_subscriptions").upsert({endpoint:j.endpoint,p256dh:j.keys.p256dh,auth:j.keys.auth});
+    if(error)throw error;
+    S.pushState="on";render();
+    await callAssist({action:"test-push"});flash("휴대폰 알림을 켰어요. 테스트 알림을 보냈어요.");
+  }catch(e){flash("알림을 켜지 못했어요. "+(e&&e.message||""))}
+}
+async function pushOff(){
+  try{const reg=await navigator.serviceWorker.getRegistration("/");const sub=reg&&await reg.pushManager.getSubscription();
+    if(sub){await S.sb.from("push_subscriptions").delete().eq("endpoint",sub.endpoint);await sub.unsubscribe()}}catch(_){}
+  S.pushState="off";render();flash("이 기기의 휴대폰 알림을 껐어요.");
 }
 function vMistakes(){
   const list=S.mistakes.filter(m=>m.author===S.uid).sort((a,b)=>b.count-a.count||String(b.last_seen).localeCompare(String(a.last_seen)));
@@ -697,7 +821,7 @@ function vDrillGuide(){
       '<li><b>방향</b>을 골라요. 희주는 <b>한→영</b>, 혜림은 <b>영→한</b>이 먼저 열리지만, 다른 방향도 눌러서 풀 수 있어요.</li>'+
       '<li>주제를 고르고 <b>내 번역</b>을 써서 <b>제출</b>해요. 제출하면 잠기고, 고치려면 <b>수정</b>을 눌러요.</li>'+
       '<li>제출하면 <b>추천 표현</b>이 열려요. 상대도 제출했다면 상대 번역도 보여요.</li>'+
-      '<li>왜 틀렸는지 궁금하면 <b>왜 틀렸는지 Claude에게 묻기</b>를 눌러요. 희주가 Claude에게 "피드백 확인해줘"라고 하면 설명이 달려요.</li>'+
+      '<li>왜 틀렸는지 궁금하면 <b>왜 틀렸는지 AI에게 묻기</b>를 눌러요. 몇 초 뒤 설명이 달리고, 🔔 알림과 휴대폰 알림으로도 알려 줘요. 자동 답변이 안 되면 희주가 Claude에게 "피드백 확인해줘"라고 해서 채워요.</li>'+
       '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요.</li>'+
     '</ol>'+
     '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
@@ -718,7 +842,7 @@ function vDrills(){
     const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
     const others=S.drillAns.filter(a=>a.drill_id===d.id&&a.author!==S.uid);
     const model=S.drillModels[d.id];
-    let c='<article class="card drill"><p class="ctx">'+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
+    let c='<article class="card drill" id="drill-'+esc(d.id)+'"><p class="ctx">'+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
     if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
@@ -772,7 +896,7 @@ function vSessionGuide(){
     '</ol>'+
     '<p class="sub" style="margin:0">추천 표현과 피드백</p><ol>'+
       '<li>내 번역을 저장하면 <b>추천 표현 보기</b>가 열려요. 추천 번역, 다르게 말하는 법, 포인트가 있어요. 새 원문의 추천 표현은 희주가 Claude에게 부탁하면 채워져요.</li>'+
-      '<li>내 번역이 왜 어색한지 궁금하면 <b>왜 틀렸는지 Claude에게 묻기</b>를 눌러요. 설명은 나만 보고, 자주 틀리는 표현은 번역 연습 탭의 <b>내 오답 노트</b>에 모여요.</li>'+
+      '<li>내 번역이 왜 어색한지 궁금하면 <b>왜 틀렸는지 AI에게 묻기</b>를 눌러요. 설명은 나만 보고, 자주 틀리는 표현은 번역 연습 탭의 <b>내 오답 노트</b>에 모여요.</li>'+
     '</ol>'+
     '<p class="sub" style="margin:0">난이도</p><dl class="sts">'+
       '<dt><span class="chip lv-쉬움">쉬움</span></dt><dd>1~2문장. 일상 대화, 안내문처럼 짧고 쉬운 글이에요. 처음엔 여기서 시작해요.</dd>'+
@@ -912,7 +1036,8 @@ async function onSubmit(form){
     if(await write(()=>S.sb.from("taglines").insert(doc),"태그라인을 올렸어요."))clear(["g-text","g-brief"]);
   }else if(kind==="request"){
     const title=val("q-title");if(!title)return;
-    if(await write(()=>S.sb.from("requests").insert({title,kind:val("q-kind"),body:val("q-body")}),"건의를 올렸어요. Claude가 확인할 거예요."))clear(["q-title","q-kind","q-body"]);
+    let newId=null;
+    if(await write(async()=>{const r=await S.sb.from("requests").insert({title,kind:val("q-kind"),body:val("q-body")}).select("id").single();newId=r.data&&r.data.id;return r},"건의를 올렸어요. Claude가 확인할 거예요.")){clear(["q-title","q-kind","q-body"]);if(newId)callAssist({action:"request-posted",id:newId})}
   }else if(kind==="name"){
     const name=val("n-name");if(!name)return;
     if(await write(()=>S.sb.from("name_candidates").insert({name,gloss:val("n-gloss"),why:val("n-why"),shown:true}),"후보를 추가했어요: ‘"+name+"’"))clear(["n-name","n-gloss","n-why"]);
@@ -936,6 +1061,7 @@ async function toggleFav(type,id){
 
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
+  if(S.notifOpen&&!e.target.closest(".bell-wrap")){S.notifOpen=false;renderBell()}
   const tb=e.target.closest("#tabs button");
   if(tb){S.confirm=null;S.revealed=false;setTab(tb.dataset.tab);return}
   const b=e.target.closest("[data-action]");if(!b)return;
@@ -973,11 +1099,25 @@ document.addEventListener("click",async e=>{
   else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
   else if(a==="drill-dir"){S.drillDir=b.dataset.v;render()}
   else if(a==="model-toggle"){const k=b.dataset.k;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
-  else if(a==="fb-req"){await write(()=>S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id}),"피드백을 요청했어요. Claude가 확인하면 설명이 달려요.")}
+  else if(a==="fb-req"){
+    const {data,error}=await S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id}).select("id").single();
+    if(error){flash("요청하지 못했어요.");return}
+    await reload("feedback");runFeedback(data.id);
+  }
+  else if(a==="fb-retry"){runFeedback(id)}
+  else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
+  else if(a==="fb-open"){openFeedback(id)}
+  else if(a==="fb-seen-all"){const ids=unseenFb().map(f=>f.id),now=new Date().toISOString();for(const f of S.feedback)if(ids.includes(f.id))f.seen_at=now;if(ids.length)S.sb.from("feedback_requests").update({seen_at:now}).in("id",ids).then(()=>{});renderBell()}
+  else if(a==="goto-requests"){S.notifOpen=false;S.reqFilter="open";setTab("requests")}
+  else if(a==="push-on"){pushOn()}
+  else if(a==="push-off"){pushOff()}
+  else if(a==="push-test"){const r=await callAssist({action:"test-push"});flash(r.sent?"테스트 알림을 보냈어요.":"보낼 기기가 없어요. 알림을 다시 켜 주세요.")}
   else if(a==="fb-cancel"){await write(()=>S.sb.from("feedback_requests").delete().eq("id",id),"요청을 취소했어요.")}
   else if(a==="fb-again"){
     const r=await S.sb.from("feedback_requests").delete().eq("id",id);if(r.error){flash("다시 요청하지 못했어요.");return}
-    await write(()=>S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:b.dataset.tid}),"다시 요청했어요.");
+    const {data,error}=await S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:b.dataset.tid}).select("id").single();
+    if(error){flash("다시 요청하지 못했어요.");return}
+    await reload("feedback");runFeedback(data.id);
   }
   else if(a==="drill-save"){
     const v=((document.getElementById("da-"+id)||{}).value||"").trim();
@@ -1144,6 +1284,7 @@ const loaders={
   async feedback(){
     const [a,b]=await Promise.all([S.sb.from("feedback_requests").select("*"),S.sb.from("mistake_notes").select("*")]);
     S.feedback=a.error?[]:a.data;S.mistakes=b.error?[]:b.data;
+    if(S.isAdmin){const {data:q,error}=await S.sb.rpc("feedback_queue");S.fbQueue=error?[]:(q||[])}
   },
   async names(){
     const [a,b]=await Promise.all([S.sb.from("name_candidates").select("*"),S.sb.from("name_votes").select("candidate_id,author")]);
@@ -1172,14 +1313,19 @@ render();
     if(!session){S.dbState="login";$("#me").innerHTML="";render();return}
     if(started)return;started=true;
     S.uid=(session.user.email||"").toLowerCase();
-    const {data:members}=await S.sb.from("members").select("email,display_name,drill_dir");
+    const {data:members}=await S.sb.from("members").select("email,display_name,drill_dir,is_admin");
     for(const m of members||[])S.names[m.email]={name:m.display_name};
-    {const mine=(members||[]).find(m=>m.email===S.uid);if(mine&&mine.drill_dir)S.drillDir=mine.drill_dir}
+    {const mine=(members||[]).find(m=>m.email===S.uid);if(mine&&mine.drill_dir)S.drillDir=mine.drill_dir;S.isAdmin=!!(mine&&mine.is_admin)}
     if(!(members||[]).some(m=>m.email===S.uid)){S.dbState="notmember";render();return}
-    $("#me").innerHTML='<span>'+esc(S.names[S.uid].name)+'</span><button class="link" data-action="logout">로그아웃</button>';
+    $("#me").innerHTML='<div class="bell-wrap"><button class="bell" id="bell" data-action="bell-toggle" aria-label="알림" aria-expanded="false">🔔<span class="tab-badge" hidden></span></button><div class="notif" id="notif" hidden></div></div><span>'+esc(S.names[S.uid].name)+'</span><button class="link" data-action="logout">로그아웃</button>';
     await reload();S.dbState="ready";
     if(location.pathname!==tabUrl(S.tab)||location.hash)history.replaceState(null,"",tabUrl(S.tab)+location.search);
     render();
+    // 알림을 눌러 들어온 경우(/drills?fb=<요청 id>) 그 카드로 이동한다
+    {const fb=new URLSearchParams(location.search).get("fb");if(fb){history.replaceState(null,"",location.pathname);openFeedback(fb)}}
+    // 서비스 워커는 알림을 받으려고만 쓴다(오프라인 캐시 없음)
+    if("serviceWorker" in navigator)navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    refreshPush().then(renderBell);
     const ch=S.sb.channel("rr");
     for(const t of Object.keys(TABLE_TO_LOADER))ch.on("postgres_changes",{event:"*",schema:"public",table:t},()=>reload(TABLE_TO_LOADER[t]));
     ch.subscribe();
