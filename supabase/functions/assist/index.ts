@@ -2,7 +2,7 @@
 // 앱(docs/index.html)이 로그인한 사용자 토큰으로 부른다. 멤버만 쓸 수 있다.
 //   { action: "feedback", id }        → 내 피드백 요청에 Gemini가 설명을 달고, 오답 노트를 갱신하고, 푸시를 보낸다
 //   { action: "request-posted", id }  → 새 건의가 올라왔다고 관리자(희주)에게 푸시
-//   { action: "test-push" }           → 내 기기로 테스트 푸시
+//   { action: "test-push", endpoint? } → 테스트 푸시. endpoint가 있으면 그 기기로만(버튼을 누른 기기), 없으면 내 모든 기기로
 //   { action: "comment-reply", id }   → 내 답장을 원래 코멘트 쓴 사람에게 푸시
 // DB 트리거(pg_net)가 x-hook-secret 헤더로 부른다:
 //   { action: "request-done", id }    → 건의가 완료되면 올린 사람에게 푸시
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     if (body.action === "request-posted") return json(await requestPosted(db, me as Member, String(body.id || "")));
     if (body.action === "comment-reply") return json(await commentReply(db, me as Member, String(body.id || "")));
     if (body.action === "test-push") {
-      const n = await pushTo(db, [email], { title: "알림이 켜졌어요", body: "피드백 답변과 새 소식을 이 기기로 알려 드릴게요.", url: "/" });
+      const n = await pushTo(db, [email], { title: "알림 테스트", body: "이 기기로 알림이 잘 와요.", url: "/" }, body.endpoint ? String(body.endpoint) : undefined);
       return json({ ok: true, sent: n });
     }
     return json({ error: "unknown action" }, 400);
@@ -263,9 +263,11 @@ async function pushAdmins(db: SupabaseClient, except: string, msg: Record<string
   const to = (data || []).map((m) => m.email).filter((e) => e !== except);
   return to.length ? await pushTo(db, to, msg) : 0;
 }
-async function pushTo(db: SupabaseClient, emails: string[], msg: Record<string, string>) {
+async function pushTo(db: SupabaseClient, emails: string[], msg: Record<string, string>, onlyEndpoint?: string) {
   if (!(await initVapid(db))) return 0;
-  const { data: subs } = await db.from("push_subscriptions").select("*").in("author", emails);
+  let q = db.from("push_subscriptions").select("*").in("author", emails);
+  if (onlyEndpoint) q = q.eq("endpoint", onlyEndpoint);
+  const { data: subs } = await q;
   let sent = 0;
   for (const s of subs || []) {
     try {
