@@ -225,6 +225,7 @@ details.sess>summary::-webkit-details-marker{display:none}
 .drill .ko{margin:0;font:700 20px/1.5 var(--sans);letter-spacing:-.01em}
 .drill .ctx{margin:0;font-size:12px;color:var(--muted)}
 .drill .status{display:flex;flex-wrap:wrap;gap:6px}
+.chip.by-user{background:var(--en-soft);color:var(--en)}
 .chip.done{background:var(--en-soft);color:var(--en)}
 .chip.lv-쉬움{background:color-mix(in srgb,var(--ok) 16%,transparent);color:color-mix(in srgb,var(--ok) 80%,var(--ink))}
 .chip.lv-보통{background:color-mix(in srgb,var(--warn) 18%,transparent);color:color-mix(in srgb,var(--warn) 65%,var(--ink))}
@@ -983,6 +984,9 @@ function vNames(){
   const members=Object.keys(S.names);
   const nm=m=>m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0];
   const votesOf=id=>S.nameVotes.filter(v=>v.candidate_id===id).map(v=>v.author);
+  // 누가 넣은 후보인지: 직접 추가(이름·시각) / Claude 추천
+  const byChip=c=>c.added_by?'<span class="chip by-user" title="'+esc(fmtTime(c.created_at))+'">'+esc(nm(c.added_by))+' 직접 추가 · '+esc(fmtTime(c.created_at))+'</span>':'<span class="chip">Claude 추천</span>';
+  const byShort=c=>c.added_by?' <span class="chip by-user">'+esc(nm(c.added_by))+' 추가</span>':'';
   const active=S.names_c.filter(c=>c.shown&&!c.excluded).sort((a,b)=>a.sort-b.sort||String(a.created_at).localeCompare(String(b.created_at)));
   const pool=S.names_c.filter(c=>!c.shown&&!c.excluded);
   const out=S.names_c.filter(c=>c.excluded).sort((a,b)=>String(b.excluded_at).localeCompare(String(a.excluded_at)));
@@ -990,12 +994,11 @@ function vNames(){
   // results
   const ranked=active.map(c=>({c,v:votesOf(c.id)})).filter(x=>x.v.length).sort((a,b)=>b.v.length-a.v.length||a.c.sort-b.c.sort);
   h+='<section class="card results"><p class="sub" style="margin:0">투표 결과</p>'+
-    (ranked.length?ranked.map(x=>'<div class="rrow"><b>'+esc(x.c.name)+'</b><span class="bar"><i style="width:'+Math.round(100*x.v.length/Math.max(1,members.length))+'%"></i></span><span class="note">'+x.v.map(nm).map(esc).join(" · ")+(members.length&&x.v.length>=members.length?' · <b style="color:var(--ko)">둘 다 좋아해요</b>':'')+'</span></div>').join(""):'<p class="note" style="margin:0">아직 투표가 없어요. 아래 후보에 좋아요를 눌러 보세요.</p>')+'</section>';
+    (ranked.length?ranked.map(x=>'<div class="rrow"><b>'+esc(x.c.name)+byShort(x.c)+'</b><span class="bar"><i style="width:'+Math.round(100*x.v.length/Math.max(1,members.length))+'%"></i></span><span class="note">'+x.v.map(nm).map(esc).join(" · ")+(members.length&&x.v.length>=members.length?' · <b style="color:var(--ko)">둘 다 좋아해요</b>':'')+'</span></div>').join(""):'<p class="note" style="margin:0">아직 투표가 없어요. 아래 후보에 좋아요를 눌러 보세요.</p>')+'</section>';
   // candidates
   h+='<div class="ncards">'+active.map(c=>{
     const v=votesOf(c.id),mine=v.includes(S.uid),both=members.length>1&&v.length>=members.length;
-    return '<article class="card nc'+(both?" both":"")+'"><p class="nm">'+esc(c.name)+'</p>'+(c.gloss?'<p class="gl">'+esc(c.gloss)+'</p>':"")+(c.why?'<p class="why">'+esc(c.why)+'</p>':"")+
-      (c.added_by?'<p class="note" style="margin:0">'+esc(nm(c.added_by))+' 제안</p>':"")+
+    return '<article class="card nc'+(both?" both":"")+'"><div>'+byChip(c)+'</div><p class="nm">'+esc(c.name)+'</p>'+(c.gloss?'<p class="gl">'+esc(c.gloss)+'</p>':"")+(c.why?'<p class="why">'+esc(c.why)+'</p>':"")+
       '<div class="acts"><button class="btn small vote" data-action="nvote" data-id="'+esc(c.id)+'" aria-pressed="'+mine+'">'+(mine?"♥ 좋아요":"♡ 좋아요")+(v.length?" "+v.length:"")+'</button>'+
       askDel("빼기",{do:"nexclude",id:c.id,what:"후보 ‘"+c.name+"’",verb:"뺄까요?",ok:"빼기",extra:"두 사람 모두의 목록에서 빠져요. 빠진 후보에서 되살릴 수 있어요."})+
       '</div></article>';
@@ -1010,7 +1013,7 @@ function vNames(){
     '<label class="f">왜 어울리는지<input type="text" id="n-why" placeholder="선택"></label>'+
     '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
   if(out.length)h+='<details class="add" data-key="names-out"'+(S.open.has("names-out")?" open":"")+'><summary>빠진 후보 '+out.length+'개</summary><div class="past">'+
-    out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b> <span class="note">· '+esc(subj(c.excluded_by||"",nm))+' 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
+    out.map(c=>'<div class="row"><p><b>'+esc(c.name)+'</b>'+byShort(c)+' <span class="note">· '+esc(subj(c.excluded_by||"",nm))+' 뺌</span></p><button class="link" data-action="nrestore" data-id="'+esc(c.id)+'">되살리기</button></div>').join("")+'</div></details>';
   return h;
 }
 
