@@ -1248,8 +1248,15 @@ document.addEventListener("keydown",e=>{
 document.addEventListener("click",e=>{
   const h=e.target.closest("#home-link");
   if(!h||S.dbState!=="ready"||e.metaKey||e.ctrlKey||e.shiftKey)return;
-  e.preventDefault();S.confirm=null;S.revealed=false;setTab("daily");
+  e.preventDefault();S.confirm=null;S.revealed=false;collapseAll();setTab("daily");
 });
+// 제목(앱 이름)으로 처음 화면에 올 때는 펼쳐 둔 것을 모두 접는다:
+// 코멘트, 답장 입력칸, 지난 문장, 오늘의 문장 뜻, 추천 표현, 안내 상자, 용어 뜻, 알림 창.
+// 쓰던 입력칸(S.dirty)과 수정 중인 칸(S.editing)은 건드리지 않는다.
+function collapseAll(){
+  S.cmtOpen.clear();S.replyTo=null;S.open.clear();S.shown.clear();S.showAll=false;
+  S.dailyOpen=false;S.pastLimit=20;S.notifOpen=false;
+}
 function setTab(t){
   if(!TABS.includes(t))return;
   S.tab=t;
