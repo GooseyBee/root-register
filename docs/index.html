@@ -70,6 +70,18 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .nrow b{font-weight:650}
 .nrow .note{font-size:12px}
 .ntime{font-size:12px;color:var(--muted)}
+.card.pair-turn,details.sess.pair-turn{border-left:5px solid var(--warn);background:color-mix(in srgb,var(--warn) 8%,var(--surface))}
+.card.pair-both,details.sess.pair-both{border-left:5px solid var(--ok)}
+.card.pair-mine,details.sess.pair-mine{border-left:5px solid color-mix(in srgb,var(--en) 45%,var(--line))}
+.pst-row{display:block;width:100%;margin:0 0 8px}
+details.sess>summary .pst-row{margin:0}
+.pst{display:inline-block;font:700 12px/1 var(--sans);padding:6px 10px;border-radius:999px}
+.pst.turn{background:var(--warn);color:#2a1d00}
+.pst.both{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+.pst.mine{background:var(--en-soft);color:var(--en)}
+.tcount{display:inline-block;min-width:16px;margin-left:5px;padding:0 4px;border-radius:999px;background:var(--warn);color:#2a1d00;font:700 10px/16px var(--sans);text-align:center}
+.turn-only{border:1px solid var(--warn);background:var(--surface);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);color:var(--ink);cursor:pointer}
+.turn-only[aria-pressed="true"]{background:var(--warn);color:#2a1d00;border-color:var(--warn)}
 .push-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .npref{margin-top:8px}.npref summary{cursor:pointer;font-size:13px;color:var(--muted)}
 .npref-list{display:grid;gap:6px;padding:8px 0 0;font-size:14px}.npref-list label{display:flex;gap:8px;align-items:center;cursor:pointer}
@@ -382,7 +394,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],notifyOff:[],isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],notifyOff:[],isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -542,6 +554,19 @@ function addTermForm(){
     '<div class="row-actions"><button class="btn primary" type="submit">추가</button><span class="note">언어는 입력한 글자로 자동 판별해요.</span></div></form></details>';
 }
 
+// 제출 상태: 상대만 제출(turn, 내 차례) / 둘 다(both) / 나만(mine) / 아무도(none).
+// 상대가 먼저 낸 곳이 한눈에 보이게 카드 왼쪽 띠와 배지 색을 다르게 한다.
+function pairState(mine,others){return others.length?(mine?"both":"turn"):(mine?"mine":"none")}
+function pairBadge(st,others){
+  const n=others.map(m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0]).join(", ");
+  return st==="turn"?'<span class="pst turn">✋ '+esc(n)+' 님 제출 · 내 차례</span>':st==="both"?'<span class="pst both">✓ 둘 다 제출 · 비교해 보세요</span>':st==="mine"?'<span class="pst mine">나만 제출 · 상대를 기다려요</span>':'';
+}
+function sessPair(s){
+  const done=S.sessStatus.filter(x=>x.session_id===s.id);
+  const mine=done.some(x=>x.author===S.uid)||!!(S.uid&&s.versions&&String(s.versions[S.uid]||"").trim());
+  const others=[...new Set(done.filter(x=>x.author!==S.uid).map(x=>x.author))];
+  return {st:pairState(mine,others),others};
+}
 function vSessions(){
   let h=vSessionGuide();
   const nextNo=S.sessions.reduce((m,s)=>Math.max(m,s.no||0),0)+1;
@@ -553,14 +578,15 @@ function vSessions(){
     '<label class="f">원문<textarea id="s-src" required></textarea></label>'+
     '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
   if(!S.sessions.length)return h+'<div class="empty">아직 원문이 없어요.</div>';
-  h+='<div class="rv-top"><div class="seg" role="group" aria-label="난이도">'+["all"].concat(LEVELS).map(k=>'<button data-action="sess-level" data-v="'+k+'" aria-pressed="'+(S.sessLevel===k)+'">'+(k==="all"?"전체":k)+'</button>').join("")+'</div>'+favOnlyBtn("sessions")+'</div>';
-  const list=S.sessions.filter(s=>(!S.favOnly.sessions||isFav("session",s.id))&&(S.sessLevel==="all"||s.level===S.sessLevel)).slice().sort((a,b)=>(b.no||0)-(a.no||0)||LEVELS.indexOf(a.level)-LEVELS.indexOf(b.level)||String(b.dir).localeCompare(String(a.dir)));
+  h+='<div class="rv-top"><div class="seg" role="group" aria-label="난이도">'+["all"].concat(LEVELS).map(k=>'<button data-action="sess-level" data-v="'+k+'" aria-pressed="'+(S.sessLevel===k)+'">'+(k==="all"?"전체":k)+'</button>').join("")+'</div>'+(()=>{const n=S.sessions.filter(s=>sessPair(s).st==="turn").length;return n||S.sessTurn?'<button class="turn-only" data-action="sess-turn" aria-pressed="'+S.sessTurn+'">✋ 내 차례 '+n+'</button>':''})()+favOnlyBtn("sessions")+'</div>';
+  const list=S.sessions.filter(s=>(!S.sessTurn||sessPair(s).st==="turn")&&(!S.favOnly.sessions||isFav("session",s.id))&&(S.sessLevel==="all"||s.level===S.sessLevel)).slice().sort((a,b)=>(b.no||0)-(a.no||0)||LEVELS.indexOf(a.level)-LEVELS.indexOf(b.level)||String(b.dir).localeCompare(String(a.dir)));
   if(!list.length)return h+'<div class="empty">이 난이도의 원문이 아직 없어요.</div>';
   return h+list.map((s,i)=>{
     const key="sess-"+s.id,open=S.open.has(key)||(!S.open.has("touched-sess")&&i<2);
     const vers=s.versions||{},mine=S.uid?vers[S.uid]:"";
     const others=Object.keys(vers).filter(k=>k!==S.uid&&vers[k]);
-    return '<details class="sess" data-key="'+key+'"'+(open?" open":"")+'><summary><span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
+    const pp=sessPair(s);
+    return '<details class="sess pair-'+pp.st+'" data-key="'+key+'"'+(open?" open":"")+'><summary>'+(pp.st!=="none"?'<span class="pst-row">'+pairBadge(pp.st,pp.others)+'</span>':'')+'<span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
       '<div class="sbody"><div><p class="sub">원문</p><p class="src">'+esc(s.source)+'</p></div>'+
       '<div><p class="sub">번역</p><div class="vers">'+
         (S.canWrite&&S.uid?myVersion(s,mine):(mine?'<div class="ver">'+whoHTML(S.uid)+'<p>'+esc(mine)+'</p></div>':""))+
@@ -946,21 +972,24 @@ function vDrillGuide(){
       '<li>왜 틀렸는지 궁금하면 두 가지로 물어볼 수 있어요. <b>⚡ AI에게 바로 묻기</b>는 Gemini가 몇 초 만에 답해요. <b>🔍 Claude 정밀 검토</b>는 Claude가 더 깊게 보고 Gemini 설명이 맞는지도 확인해요. 정밀 검토는 하루 3번(오전 9시·오후 1시·밤 9시쯤) 답이 달리고, 도착하면 알림이 가요.</li>'+
       '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
     '</ol>'+
+    '<p class="note" style="margin:0">카드 왼쪽 색: <b>주황 ✋</b> 상대가 먼저 제출(내 차례), <b>초록 ✓</b> 둘 다 제출, <b>파랑</b> 나만 제출. <b>✋ 내 차례</b>를 누르면 그 문장만 모아 봐요. 교차번역도 같아요.</p>'+
     '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
 }
 function vDrills(){
   const members=Object.keys(S.names);
   const submitted=(id,who)=>S.drillStatus.some(x=>x.drill_id===id&&x.author===who);
   const lang=langOf(S.drillDir);
+  const dState=d=>pairState(submitted(d.id,S.uid),members.filter(m=>m!==S.uid&&submitted(d.id,m)));
+  const turnCount=f=>S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&f(d)&&dState(d)==="turn").length;
   let h=vDrillGuide()+vReports()+vMistakes();
   h+='<div class="rv-top"><div class="seg" role="group" aria-label="방향">'+
     DIRS.map(([k,l])=>'<button data-action="drill-dir" data-v="'+k+'" aria-pressed="'+(S.drillDir===k)+'">'+l+'</button>').join("")+'</div>'+
     '<div class="seg" role="group" aria-label="주제">'+
-    TOPICS.map(([k,l])=>'<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+'</button>').join("")+'</div>'+
-    '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
-  const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
+    TOPICS.map(([k,l])=>{const n=turnCount(d=>d.topic===k);return '<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+(n?'<span class="tcount" title="내 차례">'+n+'</span>':'')+'</button>'}).join("")+'</div>'+
+    '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["turn","✋ 내 차례"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
+  const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="turn"||dState(d)==="turn")&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
     .sort((a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10))||((b.for_author===S.uid)-(a.for_author===S.uid))||a.sort-b.sort);  // 새 묶음이 위로, 그 안에서 나를 위한 문장이 먼저
-  if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":"표시할 문장이 없어요.")+'</div>';
+  if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":S.drillFilter==="turn"?"상대가 먼저 낸 문장이 없어요. 모두 따라잡았어요.":"표시할 문장이 없어요.")+'</div>';
   return h+list.map(d=>{
     const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
     const others=S.drillAns.filter(a=>a.drill_id===d.id&&a.author!==S.uid);
@@ -969,7 +998,8 @@ function vDrills(){
     // 오답 노트로 만든 맞춤 문장: 나를 위한 것이면 무엇을 연습하는지 보여 준다
     const forMe=d.for_author===S.uid,forOther=d.for_author&&!forMe;
     const pchip=forMe?'<span class="chip bad">나를 위한 문장'+(d.focus?' · '+esc(d.focus):'')+'</span> ':forOther?'<span class="chip">'+esc((S.names[d.for_author]&&S.names[d.for_author].name)||"")+' 맞춤</span> ':'';
-    let c='<article class="card drill" id="drill-'+esc(d.id)+'"><p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
+    const st=dState(d),oth=members.filter(m=>m!==S.uid&&submitted(d.id,m));
+    let c='<article class="card drill pair-'+st+'" id="drill-'+esc(d.id)+'">'+(st!=="none"?'<div class="pst-row">'+pairBadge(st,oth)+'</div>':'')+'<p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
     if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
@@ -1228,6 +1258,7 @@ document.addEventListener("click",async e=>{
     if(await write(()=>S.sb.from("requests").update({title:t,kind:val("qe-kind-"+id),body:val("qe-body-"+id),updated_at:new Date().toISOString()}).eq("id",id),"건의를 수정했어요.")){S.reqEdit=null;clear(["qe-title-"+id,"qe-kind-"+id,"qe-body-"+id]);render()}
   }
   else if(a==="sess-level"){S.sessLevel=b.dataset.v;render()}
+  else if(a==="sess-turn"){S.sessTurn=!S.sessTurn;render()}
   else if(a==="drill-topic"){S.drillTopic=b.dataset.v;render()}
   else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
   else if(a==="drill-dir"){S.drillDir=b.dataset.v;render()}
