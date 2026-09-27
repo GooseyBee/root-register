@@ -69,6 +69,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .nrow.static{cursor:default}
 .nrow b{font-weight:650}
 .nrow .note{font-size:12px}
+.ntime{font-size:12px;color:var(--muted)}
 .push-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
 .npref{margin-top:8px}.npref summary{cursor:pointer;font-size:13px;color:var(--muted)}
 .npref-list{display:grid;gap:6px;padding:8px 0 0;font-size:14px}.npref-list label{display:flex;gap:8px;align-items:center;cursor:pointer}
@@ -802,7 +803,7 @@ const reportUnseen=()=>S.reports.filter(r=>r.author===S.uid&&!r.seen_at);
 function sessWaiting(){
   const last=S.sessions.reduce((m,s)=>Math.max(m,s.no||0),0);
   return S.sessions.filter(s=>s.no===last&&!S.sessStatus.some(x=>x.session_id===s.id&&x.author===S.uid))
-    .map(s=>({s,by:[...new Set(S.sessStatus.filter(x=>x.session_id===s.id&&x.author!==S.uid).map(x=>x.author))]}))
+    .map(s=>{const o=S.sessStatus.filter(x=>x.session_id===s.id&&x.author!==S.uid);return {s,by:[...new Set(o.map(x=>x.author))],at:o.map(x=>x.updated_at||"").sort().pop()}})
     .filter(x=>x.by.length);
 }
 // 휴대폰 알림 종류. 끈 것만 notify_prefs.off에 저장한다(Edge Function assist의 kind와 같은 이름).
@@ -820,6 +821,14 @@ function openSession(id){
   S.notifOpen=false;S.open.add("sess-"+id);S.open.add("touched-sess");S.sessLevel="all";setTab("sessions");
   requestAnimationFrame(()=>{const el=document.querySelector('[data-key="sess-'+CSS.escape(id)+'"]');if(el)el.scrollIntoView({behavior:"smooth",block:"start"})});
 }
+// 알림 시각: 하루 안이면 "12분 전 · 오후 3:10", 그 전이면 "9. 26. 오후 3:10"
+function when(t){
+  if(!t)return "";const d=new Date(t),m=Math.floor((Date.now()-d)/60000);
+  const clock=d.toLocaleTimeString("ko-KR",{timeZone:"Asia/Seoul",hour:"numeric",minute:"2-digit"});
+  if(m<1)return "방금 · "+clock;if(m<60)return m+"분 전 · "+clock;if(m<1440)return Math.floor(m/60)+"시간 전 · "+clock;
+  return d.toLocaleString("ko-KR",{timeZone:"Asia/Seoul",month:"numeric",day:"numeric",hour:"numeric",minute:"2-digit"});
+}
+const tm=t=>t?'<span class="ntime">'+esc(when(t))+'</span>':'';
 const cut=(t,n)=>{t=String(t||"").replace(/\s+/g," ").trim();return t.length>n?t.slice(0,n-1)+"…":t};
 function targetLabel(type,id){
   if(type==="drill"){const d=S.drills.find(x=>x.id===id);return d?"번역 연습 · "+cut(d.source||d.ko,40):"번역 연습"}
@@ -836,21 +845,21 @@ function renderBell(){
   let h='<div class="notif-head"><h3>알림</h3><button class="link" data-action="npref-open">⚙️ 알림 설정</button><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
   const un=unseenFb(),pend=myPending(),dn=doneUnseen(),cu=claudeUnseen(),rp=reportUnseen();
   if(sw.length)h+='<div class="sec"><p class="sub">교차번역 · 내 번역을 기다려요</p>'+
-    sw.map(x=>'<button class="nrow" data-action="sess-open" data-id="'+esc(x.s.id)+'"><b>'+esc(x.s.no)+'회차 · '+esc(cut(x.s.title,36))+'</b><span class="note">'+esc(x.by.map(nm).join(", "))+' 님이 저장했어요. 내 번역을 저장하면 서로 비교할 수 있어요.</span></button>').join("")+'</div>';
-  if(rp.length)h+='<div class="sec"><p class="sub">이번 주 리포트</p><button class="nrow" data-action="report-open"><b>📋 '+esc(fmtDay(rp[0].week_of))+' 주 리포트</b><span class="note">'+esc(cut(rp[0].body,70))+'</span></button></div>';
+    sw.map(x=>'<button class="nrow" data-action="sess-open" data-id="'+esc(x.s.id)+'"><b>'+esc(x.s.no)+'회차 · '+esc(cut(x.s.title,36))+'</b>'+tm(x.at)+'<span class="note">'+esc(x.by.map(nm).join(", "))+' 님이 저장했어요. 내 번역을 저장하면 서로 비교할 수 있어요.</span></button>').join("")+'</div>';
+  if(rp.length)h+='<div class="sec"><p class="sub">이번 주 리포트</p><button class="nrow" data-action="report-open"><b>📋 '+esc(fmtDay(rp[0].week_of))+' 주 리포트</b>'+tm(rp[0].created_at)+'<span class="note">'+esc(cut(rp[0].body,70))+'</span></button></div>';
   if(cu.length)h+='<div class="sec"><p class="sub">🔍 Claude 정밀 검토 도착</p>'+
-    cu.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.claude_verdict==="fixed"?'Gemini 설명을 바로잡았어요 · ':f.claude_verdict==="ok"?'Gemini 설명 검수 ✓ · ':'')+esc(cut(f.claude_answer,60))+'</span></button>').join("")+'</div>';
+    cu.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b>'+tm(f.claude_answered_at)+'<span class="note">'+(f.claude_verdict==="fixed"?'Gemini 설명을 바로잡았어요 · ':f.claude_verdict==="ok"?'Gemini 설명 검수 ✓ · ':'')+esc(cut(f.claude_answer,60))+'</span></button>').join("")+'</div>';
   if(dn.length)h+='<div class="sec"><p class="sub">내 건의 완료</p>'+
-    dn.map(r=>'<button class="nrow" data-action="req-done-open" data-id="'+esc(r.id)+'"><b>✓ '+esc(cut(r.title,40))+'</b><span class="note">'+esc(cut(r.claude_note||"처리 메모를 확인해 보세요.",70))+'</span></button>').join("")+'</div>';
+    dn.map(r=>'<button class="nrow" data-action="req-done-open" data-id="'+esc(r.id)+'"><b>✓ '+esc(cut(r.title,40))+'</b>'+tm(r.updated_at)+'<span class="note">'+esc(cut(r.claude_note||"처리 메모를 확인해 보세요.",70))+'</span></button>').join("")+'</div>';
   if(un.length)h+='<div class="sec"><p class="sub">피드백 답변 도착 <button class="link" data-action="fb-seen-all">모두 읽음</button></p>'+
-    un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
+    un.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b>'+tm(f.answered_at)+'<span class="note">'+esc(cut(f.answer,70))+'</span></button>').join("")+'</div>';
   if(pend.length)h+='<div class="sec"><p class="sub">답변을 기다리는 내 요청</p>'+
-    pend.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b><span class="note">'+(f.claude_requested_at&&!f.claude_answered_at?'🔍 Claude 정밀 검토 대기 중':f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
+    pend.map(f=>'<button class="nrow" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b>'+tm(f.claude_requested_at&&!f.claude_answered_at?f.claude_requested_at:f.created_at)+'<span class="note">'+(f.claude_requested_at&&!f.claude_answered_at?'🔍 Claude 정밀 검토 대기 중':f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
   if(S.isAdmin){
     const q=S.fbQueue.filter(x=>x.author!==S.uid).sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at))).slice(0,8);
     const newR=S.requests.filter(r=>r.status==="new");
-    if(newR.length)h+='<div class="sec"><p class="sub">새 건의 '+newR.length+'개</p><button class="nrow" data-action="goto-requests"><b>'+esc(cut(newR[0].title,40))+(newR.length>1?' 외 '+(newR.length-1)+'개':'')+'</b><span class="note">건의함에서 보기</span></button></div>';
-    if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(fmtTime(x.created_at))+' · '+(x.claude_requested_at&&!x.claude_answered_at?'🔍 Claude 정밀 검토 대기 → 루틴이 처리, 급하면 "피드백 확인해줘"':x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
+    if(newR.length)h+='<div class="sec"><p class="sub">새 건의 '+newR.length+'개</p><button class="nrow" data-action="goto-requests"><b>'+esc(cut(newR[0].title,40))+(newR.length>1?' 외 '+(newR.length-1)+'개':'')+'</b>'+tm(newR.map(r=>r.created_at||"").sort().pop())+'<span class="note">건의함에서 보기</span></button></div>';
+    if(q.length)h+='<div class="sec"><p class="sub">상대의 피드백 요청 (최근 2주)</p>'+q.map(x=>'<div class="nrow static"><b>'+esc(nm(x.author))+' · '+(x.target_type==="drill"?"번역 연습":"교차번역")+'</b><span class="note">'+esc(when(x.created_at))+' · '+(x.claude_requested_at&&!x.claude_answered_at?'🔍 Claude 정밀 검토 대기 → 루틴이 처리, 급하면 "피드백 확인해줘"':x.answered_at?'답변 완료':(x.error?'자동 답변 실패 → Claude에게 "피드백 확인해줘"':'대기 중'))+'</span></div>').join("")+'</div>';
   }
   if(h.endsWith('</button></div>')&&!h.includes('class="sec"'))h+='<p class="note" style="margin:0">새 알림이 없어요.</p>';
   const ps={on:"이 기기에서 휴대폰 알림을 받고 있어요.",off:"휴대폰 알림이 꺼져 있어요.",denied:"브라우저에서 알림이 차단돼 있어요. 브라우저 설정에서 이 사이트의 알림을 허용해 주세요.",
