@@ -73,6 +73,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .npref{margin-top:8px}.npref summary{cursor:pointer;font-size:13px;color:var(--muted)}
 .npref-list{display:grid;gap:6px;padding:8px 0 0;font-size:14px}.npref-list label{display:flex;gap:8px;align-items:center;cursor:pointer}
 .notif-head{display:flex;align-items:center;justify-content:space-between}
+.notif-head .link{margin-left:auto;margin-right:8px;font-size:13px}
 .notif-close{border:0;background:none;color:var(--muted);font-size:20px;line-height:1;cursor:pointer;padding:2px 6px}
 /* 좁은 화면: 벨이 왼쪽으로 내려가서 오른쪽 기준 패널이 화면 밖으로 나간다 → 화면 안에 고정 */
 @media (max-width:640px){
@@ -832,7 +833,7 @@ function renderBell(){
   bd.textContent=n;bd.hidden=!n;b.setAttribute("aria-expanded",String(S.notifOpen));
   const box=$("#notif");box.hidden=!S.notifOpen;if(!S.notifOpen)return;
   const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
-  let h='<div class="notif-head"><h3>알림</h3><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
+  let h='<div class="notif-head"><h3>알림</h3><button class="link" data-action="npref-open">⚙️ 알림 설정</button><button class="notif-close" data-action="bell-close" aria-label="알림 닫기">×</button></div>';
   const un=unseenFb(),pend=myPending(),dn=doneUnseen(),cu=claudeUnseen(),rp=reportUnseen();
   if(sw.length)h+='<div class="sec"><p class="sub">교차번역 · 내 번역을 기다려요</p>'+
     sw.map(x=>'<button class="nrow" data-action="sess-open" data-id="'+esc(x.s.id)+'"><b>'+esc(x.s.no)+'회차 · '+esc(cut(x.s.title,36))+'</b><span class="note">'+esc(x.by.map(nm).join(", "))+' 님이 저장했어요. 내 번역을 저장하면 서로 비교할 수 있어요.</span></button>').join("")+'</div>';
@@ -1228,6 +1229,7 @@ document.addEventListener("click",async e=>{
     await reload("feedback");runFeedback(data.id);
   }
   else if(a==="fb-retry"){runFeedback(id)}
+  else if(a==="npref-open"){S.open.add("npref");renderBell();const d=document.querySelector(".npref");if(d)d.scrollIntoView({behavior:"smooth",block:"nearest"})}
   else if(a==="notify-kind"){setNotify(b.dataset.kind,b.checked)}
   else if(a==="sess-open"){openSession(id)}
   else if(a==="fb-claude"){
