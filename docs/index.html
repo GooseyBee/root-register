@@ -82,6 +82,18 @@ details.sess>summary .pst-row{margin:0}
 .pst.turn{background:var(--warn);color:#2a1d00}
 .pst.both{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
 .pst.mine{background:var(--en-soft);color:var(--en)}
+.dict{position:fixed;z-index:40;right:16px;bottom:16px}
+.dict-fab{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--surface);box-shadow:var(--shadow);font-size:22px;cursor:pointer}
+.dict-box{display:none;width:min(320px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;gap:10px}
+.dict.open .dict-box{display:grid}.dict.open .dict-fab{display:none}
+.dict-head{display:flex;align-items:center;justify-content:space-between}
+.dict-form{display:flex;gap:6px}.dict-form input{flex:1;min-width:0;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.dict-hint{margin:0;font-size:12px}
+.dict-recent{display:flex;flex-wrap:wrap;gap:6px}.dict-recent button{border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:999px;padding:4px 10px;font:inherit;font-size:13px;cursor:pointer}
+/* 넓은 화면에서는 오른쪽에 늘 펼쳐 둔다 */
+@media (min-width:1240px){.dict{top:96px;bottom:auto}.dict:not(.closed) .dict-box{display:grid}.dict:not(.closed) .dict-fab{display:none}.dict.closed .dict-box{display:none}.dict.closed .dict-fab{display:block}.dict-box{width:260px}
+  body:has(.dict:not(.closed)) .wrap{margin-left:max(0px,calc((100vw - 880px - 324px)/2));margin-right:308px}}
+.dict-sel{position:absolute;z-index:45;border:1px solid var(--en);background:var(--surface);color:var(--en);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);box-shadow:var(--shadow);cursor:pointer}
 .turn-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:10px 14px;border-radius:var(--r);border:1px solid var(--warn);border-left-width:5px;background:color-mix(in srgb,var(--warn) 12%,var(--surface));font-size:14px}
 .turn-bar .btn{margin-left:auto}.turn-bar.on{background:var(--surface)}
 .tcount{display:inline-block;min-width:16px;margin-left:5px;padding:0 4px;border-radius:999px;background:var(--warn);color:#2a1d00;font:700 10px/16px var(--sans);text-align:center}
@@ -368,6 +380,17 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
     <button role="tab" data-tab="requests" class="tab-meta" title="앱을 이렇게 바꿔 주세요: 개선 요청 게시판">건의함<span class="tab-badge" id="req-badge" hidden></span></button>
   </nav>
   <main id="panel" class="panel" aria-live="polite"></main>
+  <!-- 네이버 사전: 네이버는 다른 사이트 안에 페이지를 넣는 걸 막아서, 검색하면 오른쪽 옆 창(한 창을 계속 재사용)으로 연다 -->
+  <aside id="dict" class="dict" aria-label="네이버 사전">
+    <button class="dict-fab" data-action="dict-toggle" aria-label="네이버 사전 열기" title="네이버 사전">📖</button>
+    <div class="dict-box">
+      <div class="dict-head"><b>📖 네이버 사전</b><button class="notif-close" data-action="dict-toggle" aria-label="사전 접기">×</button></div>
+      <form data-form="dict" class="dict-form"><input type="search" id="dict-q" placeholder="영어·한국어 단어" autocomplete="off" enterkeyhint="search"><button class="btn small primary" type="submit">찾기</button></form>
+      <p class="note dict-hint">컴퓨터는 오른쪽 사전 창 하나에서 결과가 계속 바뀌고, 폰은 새 탭으로 열려요. 본문에서 단어를 드래그(폰은 길게 눌러 선택)해도 찾을 수 있어요.</p>
+      <div class="dict-recent" id="dict-recent"></div>
+    </div>
+  </aside>
+  <button id="dict-sel" class="dict-sel" hidden>📖 네이버 사전</button>
   <dialog id="cfm" class="cfm" aria-labelledby="cfm-title">
     <p id="cfm-title" class="cfm-title"></p>
     <p id="cfm-what" class="cfm-what"></p>
@@ -1413,6 +1436,46 @@ document.addEventListener("change",e=>{
 document.addEventListener("keyup",e=>{if(e.target.id==="f-q"){const ae=e.target,pos=ae.selectionStart;S.pending=false;
   // re-render the list while keeping the search box focused
   const saved=document.activeElement;saved.blur();render();const n=document.getElementById("f-q");if(n){n.focus();try{n.setSelectionRange(pos,pos)}catch(_){}}}});
+// ---------- 네이버 사전 ----------
+// 한 창(이름 rr-naver-dict)을 재사용해서 검색할 때마다 새 탭이 쌓이지 않게 한다. 데스크톱은 화면 오른쪽에 세로로 긴 창.
+const DICT_KEY="rr-dict-recent";
+function dictRecent(){try{return JSON.parse(localStorage.getItem(DICT_KEY)||"[]")}catch(_){return []}}
+function renderDictRecent(){const el=$("#dict-recent");if(el)el.innerHTML=dictRecent().map(w=>'<button data-action="dict-go" data-q="'+esc(w)+'">'+esc(w)+'</button>').join("")}
+function openDict(q){
+  q=String(q||"").replace(/\s+/g," ").trim().slice(0,60);if(!q)return;
+  const url="https://en.dict.naver.com/#/search?range=all&query="+encodeURIComponent(q);
+  const wide=matchMedia("(min-width:1000px) and (pointer:fine)").matches,W=520;
+  const w=wide?window.open(url,"rr-naver-dict","popup,width="+W+",height="+Math.max(600,screen.availHeight-40)+",left="+Math.max(0,screen.availWidth-W)+",top=0"):window.open(url,"_blank");
+  if(w)try{w.focus()}catch(_){}
+  try{localStorage.setItem(DICT_KEY,JSON.stringify([q,...dictRecent().filter(x=>x!==q)].slice(0,8)))}catch(_){}
+  renderDictRecent();
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-action]");if(!b)return;
+  if(b.dataset.action==="dict-toggle"){const d=$("#dict"),wide=matchMedia("(min-width:1240px)").matches;
+    if(wide){d.classList.toggle("closed");try{localStorage.setItem("rr-dict-closed",d.classList.contains("closed")?"1":"")}catch(_){}}
+    else d.classList.toggle("open");
+    if(!d.classList.contains("closed")||d.classList.contains("open"))setTimeout(()=>{const i=$("#dict-q");if(i&&i.offsetParent)i.focus()},0);}
+  else if(b.dataset.action==="dict-go")openDict(b.dataset.q);
+});
+document.addEventListener("submit",e=>{if(e.target.dataset.form==="dict"){e.preventDefault();e.stopImmediatePropagation();openDict($("#dict-q").value)}},true);
+// 본문에서 단어를 드래그(폰은 길게 눌러 선택)하면 작은 사전 버튼을 띄운다
+{let t;const sel=$("#dict-sel");
+ const hide=()=>{sel.hidden=true};
+ document.addEventListener("selectionchange",()=>{clearTimeout(t);t=setTimeout(()=>{
+   const s=window.getSelection(),txt=s?String(s).trim():"";
+   if(!s||s.isCollapsed||!txt||txt.length>40||txt.includes("\n"))return hide();
+   const n=s.anchorNode&&(s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentElement);
+   if(!n||!n.closest("#panel")||n.closest("input,textarea"))return hide();
+   const r=s.getRangeAt(0).getBoundingClientRect();
+   sel.style.left=Math.max(8,Math.min(window.scrollX+r.left,window.scrollX+document.documentElement.clientWidth-150))+"px";
+   sel.style.top=(window.scrollY+r.bottom+8)+"px";sel.dataset.q=txt;sel.hidden=false;
+ },250)});
+ sel.addEventListener("mousedown",e=>e.preventDefault());  // 누를 때 선택이 풀리지 않게
+ sel.addEventListener("click",()=>{openDict(sel.dataset.q);hide()});
+ try{if(localStorage.getItem("rr-dict-closed"))$("#dict").classList.add("closed")}catch(_){}
+ renderDictRecent();
+}
 // 알림을 누르면 읽음 처리해서 '확인한 알림'으로 내린다 (다른 클릭 처리보다 먼저)
 document.addEventListener("click",e=>{const nk=e.target.closest("[data-nkey]");if(nk&&!nk.classList.contains("read"))markRead([nk.dataset.nkey])},true);
 document.addEventListener("toggle",e=>{
