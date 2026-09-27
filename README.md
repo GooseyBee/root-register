@@ -142,7 +142,7 @@ flowchart LR
 **처음 설정**
 - [ ] [Google AI Studio](https://aistudio.google.com/apikey)에서 API 키를 만들어요. 결제(billing)는 연결하지 않아요.
 - [ ] Supabase 대시보드 → Edge Functions → Secrets에 `GEMINI_API_KEY`를 넣어요.
-- [ ] claude.ai → Routines에서 두 루틴(주간 콘텐츠, Claude 정밀 검토)에 **Supabase 커넥터와 이 저장소**를 붙여요. 붙이지 않으면 루틴이 DB에 접근하지 못해요.
+- 두 루틴(Claude 정밀 검토 하루 3번, 주간 콘텐츠 월요일)은 **Supabase가 연결된 Claude Code 세션 하나에 묶여** 그 세션 안에서 실행돼요. 새 세션마다 뜨는 루틴에는 이 조직에서 커넥터를 붙일 수 없어서 이렇게 했어요. 그 세션을 보관(archive)하거나 지우면 루틴도 멈추니, 그때는 새 세션에서 다시 만들어요.
 - [ ] 휴대폰에서 사이트를 열고 🔔 → 휴대폰 알림 **켜기**. 아이폰은 Safari 공유 → 홈 화면에 추가 → 홈 화면 아이콘으로 연 다음에 켜요.
 
 새 용어의 예문과 설명은 직접 입력하거나(`문장 | 번역` 형식), Claude Code에 부탁해 DB에 넣어요.
