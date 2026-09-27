@@ -82,6 +82,8 @@ details.sess>summary .pst-row{margin:0}
 .pst.turn{background:var(--warn);color:#2a1d00}
 .pst.both{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
 .pst.mine{background:var(--en-soft);color:var(--en)}
+.turn-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:10px 14px;border-radius:var(--r);border:1px solid var(--warn);border-left-width:5px;background:color-mix(in srgb,var(--warn) 12%,var(--surface));font-size:14px}
+.turn-bar .btn{margin-left:auto}.turn-bar.on{background:var(--surface)}
 .tcount{display:inline-block;min-width:16px;margin-left:5px;padding:0 4px;border-radius:999px;background:var(--warn);color:#2a1d00;font:700 10px/16px var(--sans);text-align:center}
 .turn-only{border:1px solid var(--warn);background:var(--surface);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);color:var(--ink);cursor:pointer}
 .turn-only[aria-pressed="true"]{background:var(--warn);color:#2a1d00;border-color:var(--warn)}
@@ -581,7 +583,10 @@ function vSessions(){
     '<label class="f">원문<textarea id="s-src" required></textarea></label>'+
     '<div class="row-actions"><button class="btn primary" type="submit">추가</button></div></form></details>';
   if(!S.sessions.length)return h+'<div class="empty">아직 원문이 없어요.</div>';
-  h+='<div class="rv-top"><div class="seg" role="group" aria-label="난이도">'+["all"].concat(LEVELS).map(k=>'<button data-action="sess-level" data-v="'+k+'" aria-pressed="'+(S.sessLevel===k)+'">'+(k==="all"?"전체":k)+'</button>').join("")+'</div>'+(()=>{const n=S.sessions.filter(s=>sessPair(s).st==="turn").length;return n||S.sessTurn?'<button class="turn-only" data-action="sess-turn" aria-pressed="'+S.sessTurn+'">✋ 내 차례 '+n+'</button>':''})()+favOnlyBtn("sessions")+'</div>';
+  h+='<div class="rv-top"><div class="seg" role="group" aria-label="난이도">'+["all"].concat(LEVELS).map(k=>'<button data-action="sess-level" data-v="'+k+'" aria-pressed="'+(S.sessLevel===k)+'">'+(k==="all"?"전체":k)+'</button>').join("")+'</div>'+favOnlyBtn("sessions")+'</div>';
+  {const t=S.sessions.filter(s=>sessPair(s).st==="turn");
+   if(S.sessTurn)h+='<div class="turn-bar on">✋ 상대가 먼저 저장한 원문만 보는 중 ('+t.length+'개) <button class="link" data-action="sess-turn">전체 보기</button></div>';
+   else if(t.length)h+='<div class="turn-bar">✋ <b>'+esc([...new Set(t.flatMap(s=>sessPair(s).others))].map(m=>(S.names[m]&&S.names[m].name)||"").join(", "))+' 님이 먼저 저장한 원문 '+t.length+'개</b> · '+esc([...new Set(t.map(s=>s.no+"회차"))].join(", "))+' <button class="btn small" data-action="sess-turn">모아 보기</button></div>'}
   const list=S.sessions.filter(s=>(!S.sessTurn||sessPair(s).st==="turn")&&(!S.favOnly.sessions||isFav("session",s.id))&&(S.sessLevel==="all"||s.level===S.sessLevel)).slice().sort((a,b)=>(b.no||0)-(a.no||0)||LEVELS.indexOf(a.level)-LEVELS.indexOf(b.level)||String(b.dir).localeCompare(String(a.dir)));
   if(!list.length)return h+'<div class="empty">이 난이도의 원문이 아직 없어요.</div>';
   return h+list.map((s,i)=>{
@@ -1025,8 +1030,13 @@ function vDrills(){
     '<div class="seg" role="group" aria-label="주제">'+
     TOPICS.map(([k,l])=>{const n=turnCount(d=>d.topic===k);return '<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+(n?'<span class="tcount" title="내 차례">'+n+'</span>':'')+'</button>'}).join("")+'</div>'+
     '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["turn","✋ 내 차례"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
-  const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&d.topic===S.drillTopic&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="turn"||dState(d)==="turn")&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
+  const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&(S.drillFilter==="turn"||d.topic===S.drillTopic)&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="turn"||dState(d)==="turn")&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
     .sort((a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10))||((b.for_author===S.uid)-(a.for_author===S.uid))||a.sort-b.sort);  // 새 묶음이 위로, 그 안에서 나를 위한 문장이 먼저
+  // 상대가 먼저 낸 문장 요약: 새 묶음이 위에 있어 주황 카드가 아래에 묻히지 않게 맨 위에 모아 알려 준다
+  {const turn=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&dState(d)==="turn");
+   if(S.drillFilter==="turn")h+='<div class="turn-bar on">✋ 상대가 먼저 낸 문장만 모아 보는 중 ('+turn.length+'개, 모든 주제) <button class="link" data-action="drill-filter" data-v="all">전체 보기</button></div>';
+   else if(turn.length){const by=TOPICS.map(([k,l])=>[l,turn.filter(d=>d.topic===k).length]).filter(x=>x[1]);
+     h+='<div class="turn-bar">✋ <b>'+esc([...new Set(turn.flatMap(d=>members.filter(m=>m!==S.uid&&submitted(d.id,m))))].map(m=>(S.names[m]&&S.names[m].name)||"").join(", "))+' 님이 먼저 낸 문장 '+turn.length+'개</b> · '+esc(by.map(x=>x[0]+" "+x[1]).join(", "))+' <button class="btn small" data-action="drill-filter" data-v="turn">모아 보기</button></div>'}}
   if(!list.length)return h+'<div class="empty">'+(S.drillFilter==="todo"?"이 주제는 모두 제출했어요.":S.drillFilter==="turn"?"상대가 먼저 낸 문장이 없어요. 모두 따라잡았어요.":"표시할 문장이 없어요.")+'</div>';
   return h+list.map(d=>{
     const mine=S.drillAns.find(a=>a.drill_id===d.id&&a.author===S.uid);
