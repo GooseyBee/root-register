@@ -11,6 +11,7 @@ flowchart TD
   S[월요일 8:50 루틴 시작] --> R[기존 문장·진행 상황 읽기]
   R --> D[번역 연습: 방향마다 12문장 작성·검수<br/>그중 사람마다 2~4문장은 오답 노트 맞춤]
   R --> RP[주간 리포트: 사람마다 1개 → 알림]
+  R --> CB[영어 카피 브리프 3개]
   D --> I1[drills + drill_models 한 트랜잭션]
   R --> Q{교차번역 마지막 회차가<br/>10일 이상 지났나? 12회차 미만?}
   Q -->|예| X[다음 회차 원문 6개 + 추천 표현]
@@ -84,6 +85,21 @@ insert into public.weekly_reports (author, week_of, body) values ('<author>', '2
 on conflict (author, week_of) do nothing;
 ```
 
+### 2-3. 영어 카피 브리프 (매주 3개)
+영어 카피 연습 탭의 "이번 주 브리프"예요. 가상의 브랜드로 3개를 넣어요.
+- [ ] 기존 브리프 읽기: `select week, title, product from copy_briefs order by week desc, sort;` 같은 제품군·같은 조건을 연달아 쓰지 않아요.
+- [ ] 3개를 서로 다르게: 제품 종류(식음료·앱/서비스·패션/뷰티·리빙·여행 등), 매체(헤드라인, 앱스토어 부제목, SNS 캡션, 옥외광고, 이메일 제목), 톤(위트·담백·고급·다정)을 섞어요.
+- [ ] 칸마다 한국어로: `title`(브랜드 · 제품), `product`(무엇을, 숫자·사실 포함), `target`(누구에게), `tone`(어떤 톤, 무엇을 말할지), `rules`(매체와 길이, 금지어 1~2개). 금지어는 상투어(best, ultimate, healthy, premium 등)로 골라서 더 구체적인 말을 쓰게 해요.
+- [ ] 실존 브랜드·인물은 쓰지 않아요. 브랜드 이름은 검색해서 유명한 곳과 겹치지 않는지 확인해요.
+- [ ] `week`는 그 주 월요일(한국 시간), `id`는 `cb-YYYYMMDD-1~3`.
+
+```sql
+insert into public.copy_briefs (id, week, title, product, target, tone, rules, sort) values
+  ('cb-20261005-1','2026-10-05','브랜드 · 제품','무엇을','누구에게','톤','매체·길이·금지어',1), ...
+on conflict (id) do nothing;
+```
+예시: [`supabase/data/20260927_copy_briefs.sql`](../../supabase/data/20260927_copy_briefs.sql)
+
 ## 3. 교차번역 (2주마다)
 - [ ] 가장 큰 `no`(회차)의 원문이 **한국 시간 기준 10일 이상 전**에 올라왔고 `no < 12`일 때만 다음 회차(`no + 1`)를 추가해요. 아니면 건너뛰어요. 모임 요일이 정해지면 이 규칙을 바꿔요.
 - [ ] 원문 6개: 난이도 `쉬움`·`보통`·`실전` × 방향 `KR→EN`·`EN→KR`.
@@ -114,6 +130,6 @@ commit;
 
 ## 4. 기록과 보고
 - [ ] 넣은 SQL을 `supabase/data/YYYYMMDD_weekly_content.sql`로 저장하고 `main`에 커밋·push해요(커밋 메시지: `Weekly content YYYY-MM-DD: 24 drills (+ session N)`).
-- [ ] 확인 쿼리: 새 id의 `drills`·`drill_models` 개수가 각각 24인지, 교차번역을 넣었으면 `sessions`·`session_models`가 6인지.
+- [ ] 확인 쿼리: 새 id의 `drills`·`drill_models` 개수가 각각 24인지, `copy_briefs`가 3개 들어갔는지, 교차번역을 넣었으면 `sessions`·`session_models`가 6인지.
 - [ ] 마지막에 한국어로 짧게 보고해요: 넣은 개수(그중 맞춤 문장은 누구에게 몇 개), 주간 리포트를 받은 사람, 교차번역 추가 여부(건너뛰었으면 이유), 두 사람의 진행 상황.
 - 실패하면(커넥터 오류 등) 아무것도 반쯤 넣지 말고(트랜잭션 롤백) 무엇이 실패했는지 보고해요.
