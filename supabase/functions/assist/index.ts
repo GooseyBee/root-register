@@ -10,6 +10,8 @@
 //   { action: "content-added", kind, n, enkr, kren } → 새 번역 연습 문장·교차번역 원문이 들어오면 모두에게 푸시
 //   { action: "claude-answered", id } → Claude 정밀 검토가 달리면 요청한 사람에게 푸시
 //   { action: "report-added", id }    → 주간 리포트가 들어오면 그 사람에게 푸시
+//   { action: "session-saved", session_id, author } → 교차번역 번역을 처음 저장하면 아직 안 한 사람에게 푸시
+// 알림 종류(kind)마다 notify_prefs.off에 들어 있는 사람은 휴대폰 알림에서 뺀다(테스트 알림은 예외).
 // 인증: 사용자 호출은 함수 안에서 토큰을 확인한다(getUser + members). 트리거 호출은 JWT가 없어서
 //       배포할 때 verify_jwt=false 로 두고, hook_secret 으로 확인한다.
 // 비밀값: GEMINI_API_KEY 는 Edge Function 시크릿(없으면 private.app_secrets 의 gemini_api_key),
@@ -48,6 +50,7 @@ Deno.serve(async (req) => {
     if (hb.action === "content-added") return json(await contentAdded(db, hb));
     if (hb.action === "claude-answered") return json(await claudeAnswered(db, String(hb.id || "")));
     if (hb.action === "report-added") return json(await reportAdded(db, String(hb.id || "")));
+    if (hb.action === "session-saved") return json(await sessionSaved(db, String(hb.session_id || ""), String(hb.author || "")));
     return json({ error: "unknown hook" }, 400);
   }
 
@@ -65,7 +68,7 @@ Deno.serve(async (req) => {
     if (body.action === "comment-reply") return json(await commentReply(db, me as Member, String(body.id || "")));
     if (body.action === "claude-requested") return json(await claudeRequested(db, me as Member, String(body.id || "")));
     if (body.action === "test-push") {
-      const n = await pushTo(db, [email], { title: "알림 테스트", body: "이 기기로 알림이 잘 와요.", url: "/" }, body.endpoint ? String(body.endpoint) : undefined);
+      const n = await pushTo(db, "", [email], { title: "알림 테스트", body: "이 기기로 알림이 잘 와요.", url: "/" }, body.endpoint ? String(body.endpoint) : undefined);
       return json({ ok: true, sent: n });
     }
     return json({ error: "unknown action" }, 400);
@@ -103,15 +106,15 @@ async function feedback(db: SupabaseClient, me: Member, id: string) {
   await saveMistakes(db, me.email, t.lang, out.mistakes || []);
 
   const url = "/" + (f.target_type === "drill" ? "drills" : "sessions") + "?fb=" + f.id;
-  await pushTo(db, [me.email], { title: "피드백이 도착했어요", body: short(t.source), url, tag: "fb-" + f.id });
-  await pushAdmins(db, me.email, { title: me.display_name + " 님이 피드백을 요청했어요", body: "자동 답변을 달았어요. " + short(t.source), url: "/", tag: "q-" + f.id });
+  await pushTo(db, "fb", [me.email], { title: "피드백이 도착했어요", body: short(t.source), url, tag: "fb-" + f.id });
+  await pushAdmins(db, "admin-fb", me.email, { title: me.display_name + " 님이 피드백을 요청했어요", body: "자동 답변을 달았어요. " + short(t.source), url: "/", tag: "q-" + f.id });
   return { status: "answered" };
 }
 
 async function fail(db: SupabaseClient, f: any, me: Member, msg: string) {
   await db.from("feedback_requests").update({ error: msg, tries: (f.tries || 0) + 1 }).eq("id", f.id);
   // 자동 답변이 안 되면 희주가 Claude에게 "피드백 확인해줘"로 처리할 수 있게 알린다
-  await pushAdmins(db, "", { title: "자동 피드백 실패", body: me.display_name + " 님 요청: " + msg.slice(0, 80) + " · Claude에게 '피드백 확인해줘'라고 해 주세요.", url: "/", tag: "fail-" + f.id });
+  await pushAdmins(db, "admin-fb", "", { title: "자동 피드백 실패", body: me.display_name + " 님 요청: " + msg.slice(0, 80) + " · Claude에게 '피드백 확인해줘'라고 해 주세요.", url: "/", tag: "fail-" + f.id });
   return { status: "pending", error: msg };
 }
 
@@ -214,14 +217,14 @@ async function saveMistakes(db: SupabaseClient, email: string, lang: string, lis
 async function requestPosted(db: SupabaseClient, me: Member, id: string) {
   const { data: r } = await db.from("requests").select("title,author").eq("id", id).maybeSingle();
   if (!r || r.author !== me.email) return { ok: false };
-  const n = await pushAdmins(db, me.email, { title: "새 건의: " + me.display_name, body: short(r.title), url: "/requests", tag: "req-" + id });
+  const n = await pushAdmins(db, "admin-req", me.email, { title: "새 건의: " + me.display_name, body: short(r.title), url: "/requests", tag: "req-" + id });
   return { ok: true, sent: n };
 }
 
 async function requestDone(db: SupabaseClient, id: string) {
   const { data: r } = await db.from("requests").select("title,author,status,claude_note").eq("id", id).maybeSingle();
   if (!r || r.status !== "done") return { ok: false };
-  const n = await pushTo(db, [r.author], { title: "건의가 완료됐어요 ✓", body: short(r.title) + (r.claude_note ? " · " + short(r.claude_note) : ""), url: "/requests?done=" + id, tag: "done-" + id });
+  const n = await pushTo(db, "done", [r.author], { title: "건의가 완료됐어요 ✓", body: short(r.title) + (r.claude_note ? " · " + short(r.claude_note) : ""), url: "/requests?done=" + id, tag: "done-" + id });
   return { ok: true, sent: n };
 }
 
@@ -231,7 +234,7 @@ async function contentAdded(db: SupabaseClient, b: any) {
   const drill = b.kind === "drills";
   const parts = drill ? [b.kren ? "한→영 " + b.kren : "", b.enkr ? "영→한 " + b.enkr : ""].filter(Boolean).join(", ") : "";
   const { data } = await db.from("members").select("email");
-  const sent = await pushTo(db, (data || []).map((m) => m.email), {
+  const sent = await pushTo(db, "content", (data || []).map((m) => m.email), {
     title: drill ? "새 번역 연습 " + n + "문장이 올라왔어요" : "새 교차번역 원문 " + n + "개가 올라왔어요",
     body: drill ? parts + " · 오늘 1~2문장 풀어 볼까요?" : "모임 전까지 각자 번역을 저장해 주세요.",
     url: drill ? "/drills" : "/sessions",
@@ -245,7 +248,7 @@ async function claudeRequested(db: SupabaseClient, me: Member, id: string) {
   const { data: f } = await db.from("feedback_requests").select("id,author,target_type,target_id,claude_requested_at,claude_answered_at").eq("id", id).maybeSingle();
   if (!f || f.author !== me.email || !f.claude_requested_at || f.claude_answered_at) return { ok: false };
   const t = await loadTarget(db, f.target_type, f.target_id, me.email);
-  const n = await pushAdmins(db, me.email, { title: me.display_name + " 님이 Claude 정밀 검토를 요청했어요", body: (t ? short(t.source) + " · " : "") + "루틴이 곧 처리해요. 급하면 Claude에게 '피드백 확인해줘'.", url: "/", tag: "cr-" + id });
+  const n = await pushAdmins(db, "admin-fb", me.email, { title: me.display_name + " 님이 Claude 정밀 검토를 요청했어요", body: (t ? short(t.source) + " · " : "") + "루틴이 곧 처리해요. 급하면 Claude에게 '피드백 확인해줘'.", url: "/", tag: "cr-" + id });
   return { ok: true, sent: n };
 }
 async function claudeAnswered(db: SupabaseClient, id: string) {
@@ -254,13 +257,39 @@ async function claudeAnswered(db: SupabaseClient, id: string) {
   const t = await loadTarget(db, f.target_type, f.target_id, f.author);
   const tag = f.claude_verdict === "fixed" ? " (Gemini 설명을 바로잡았어요)" : f.claude_verdict === "ok" ? " (Gemini 설명도 맞아요 ✓)" : "";
   const url = "/" + (f.target_type === "drill" ? "drills" : "sessions") + "?fb=" + f.id;
-  const n = await pushTo(db, [f.author], { title: "Claude 정밀 검토가 도착했어요" + tag, body: t ? short(t.source) : "", url, tag: "ca-" + id });
+  const n = await pushTo(db, "claude", [f.author], { title: "Claude 정밀 검토가 도착했어요" + tag, body: t ? short(t.source) : "", url, tag: "ca-" + id });
   return { ok: true, sent: n };
 }
 async function reportAdded(db: SupabaseClient, id: string) {
   const { data: r } = await db.from("weekly_reports").select("author,body").eq("id", id).maybeSingle();
   if (!r) return { ok: false };
-  const n = await pushTo(db, [r.author], { title: "이번 주 번역 리포트가 도착했어요", body: short(r.body), url: "/drills?report=1", tag: "report-" + id });
+  const n = await pushTo(db, "report", [r.author], { title: "이번 주 번역 리포트가 도착했어요", body: short(r.body), url: "/drills?report=1", tag: "report-" + id });
+  return { ok: true, sent: n };
+}
+
+// ---------- 교차번역 저장 → 아직 안 한 사람에게 ----------
+async function sessionSaved(db: SupabaseClient, sessionId: string, author: string) {
+  const { data: s } = await db.from("sessions").select("id,no,title").eq("id", sessionId).maybeSingle();
+  if (!s) return { ok: false };
+  const { data: round } = await db.from("sessions").select("id").eq("no", s.no);
+  const ids = (round || []).map((r) => r.id);
+  const { data: vs } = await db.from("session_versions").select("session_id,author,body,updated_at").in("session_id", ids);
+  const saved = (vs || []).filter((v) => String(v.body || "").trim());
+  // 한 번에 여러 원문을 저장해도 알림은 한 번만: 같은 사람이 같은 회차에 10분 안에 다른 원문을 이미 저장했으면 건너뛴다
+  const recent = Date.now() - 10 * 60 * 1000;
+  if (saved.some((v) => v.author === author && v.session_id !== sessionId && new Date(v.updated_at).getTime() > recent)) return { ok: true, skipped: "recent" };
+  const { data: who } = await db.from("members").select("email,display_name");
+  const name = (who || []).find((m) => m.email === author)?.display_name || "상대";
+  const done = saved.filter((v) => v.author === author).length;
+  // 이 원문에 아직 번역을 저장하지 않은 사람에게만
+  const to = (who || []).map((m) => m.email).filter((e) => e !== author && !saved.some((v) => v.author === e && v.session_id === sessionId));
+  if (!to.length) return { ok: true, sent: 0 };
+  const n = await pushTo(db, "nudge", to, {
+    title: name + " 님이 교차번역 " + s.no + "회차 번역을 저장했어요",
+    body: "원문 " + done + "/" + ids.length + "개 저장 · 내 번역도 저장하면 서로 비교할 수 있어요. (" + short(s.title) + ")",
+    url: "/sessions?sess=" + s.id,
+    tag: "nudge-" + s.no,
+  });
   return { ok: true, sent: n };
 }
 
@@ -274,7 +303,7 @@ async function commentReply(db: SupabaseClient, me: Member, id: string) {
   const { data: rs } = await db.from("comments").select("author").eq("parent_id", c.parent_id);
   const to = [...new Set([p?.author, ...(rs || []).map((x) => x.author)].filter((e) => e && e !== me.email))] as string[];
   if (!to.length) return { ok: true, sent: 0 };
-  const n = await pushTo(db, to, { title: me.display_name + " 님이 답장했어요", body: short(c.body), url: PATH[c.target_type] || "/", tag: "reply-" + c.parent_id });
+  const n = await pushTo(db, "reply", to, { title: me.display_name + " 님이 답장했어요", body: short(c.body), url: PATH[c.target_type] || "/", tag: "reply-" + c.parent_id });
   return { ok: true, sent: n };
 }
 
@@ -288,13 +317,19 @@ async function initVapid(db: SupabaseClient) {
   vapidReady = true;
   return true;
 }
-async function pushAdmins(db: SupabaseClient, except: string, msg: Record<string, string>) {
+async function pushAdmins(db: SupabaseClient, kind: string, except: string, msg: Record<string, string>) {
   const { data } = await db.from("members").select("email").eq("is_admin", true);
   const to = (data || []).map((m) => m.email).filter((e) => e !== except);
-  return to.length ? await pushTo(db, to, msg) : 0;
+  return to.length ? await pushTo(db, kind, to, msg) : 0;
 }
-async function pushTo(db: SupabaseClient, emails: string[], msg: Record<string, string>, onlyEndpoint?: string) {
-  if (!(await initVapid(db))) return 0;
+// kind: 알림 종류. 그 종류를 끈 사람(notify_prefs.off)은 뺀다. ""이면 설정과 상관없이 보낸다(테스트 알림).
+async function pushTo(db: SupabaseClient, kind: string, emails: string[], msg: Record<string, string>, onlyEndpoint?: string) {
+  if (kind && emails.length) {
+    const { data: off } = await db.from("notify_prefs").select("author").in("author", emails).contains("off", [kind]);
+    const muted = new Set((off || []).map((p) => p.author));
+    emails = emails.filter((e) => !muted.has(e));
+  }
+  if (!emails.length || !(await initVapid(db))) return 0;
   let q = db.from("push_subscriptions").select("*").in("author", emails);
   if (onlyEndpoint) q = q.eq("endpoint", onlyEndpoint);
   const { data: subs } = await q;
