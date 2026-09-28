@@ -10,6 +10,7 @@
 //   { action: "content-added", kind, n, enkr, kren } → 새 번역 연습 문장·교차번역 원문이 들어오면 모두에게 푸시
 //   { action: "claude-answered", id } → Claude 정밀 검토가 달리면 요청한 사람에게 푸시
 //   { action: "report-added", id }    → 주간 리포트가 들어오면 그 사람에게 푸시
+//   { action: "feedback-retry", id } → 과부하로 실패한 피드백 요청을 10분마다 다시 시도(pg_cron, 최대 3번)
 //   { action: "session-saved", session_id, author } → 교차번역 번역을 처음 저장하면 아직 안 한 사람에게 푸시
 // 알림 종류(kind)마다 notify_prefs.off에 들어 있는 사람은 휴대폰 알림에서 뺀다(테스트 알림은 예외).
 // 인증: 사용자 호출은 함수 안에서 토큰을 확인한다(getUser + members). 트리거 호출은 JWT가 없어서
@@ -22,8 +23,11 @@ import webpush from "npm:web-push@3.6.7";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SITE = "https://root-register.vercel.app";
-// 무료 티어 모델 이름이 바뀔 수 있어서 차례로 시도한다(404면 다음 후보). GEMINI_MODEL 시크릿이 있으면 그것부터.
-const MODELS = [Deno.env.get("GEMINI_MODEL"), "gemini-3-flash", "gemini-3-flash-preview", "gemini-2.5-flash"].filter(Boolean) as string[];
+// 무료 티어 모델을 차례로 시도한다. GEMINI_MODEL 시크릿이 있으면 그것부터.
+// 없는 모델(404)은 바로 건너뛰고, 과부하·한도(503/429/500)면 2초 쉬고 한 번 더, 그래도 안 되면 다음 모델로.
+// 무료 한도와 혼잡은 모델마다 따로라서, 하나가 붐벼도 다른 모델이 받아 줄 때가 많다.
+const MODELS = [Deno.env.get("GEMINI_MODEL"), "gemini-3-flash", "gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"].filter(Boolean) as string[];
+const MAX_TRIES = 3;  // 사용자 요청 1번 + 10분마다 자동 재시도 2번(pg_cron). 마지막까지 실패해야 희주에게 알린다
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +54,7 @@ Deno.serve(async (req) => {
     if (hb.action === "content-added") return json(await contentAdded(db, hb));
     if (hb.action === "claude-answered") return json(await claudeAnswered(db, String(hb.id || "")));
     if (hb.action === "report-added") return json(await reportAdded(db, String(hb.id || "")));
+    if (hb.action === "feedback-retry") return json(await feedbackRetry(db, String(hb.id || "")));
     if (hb.action === "session-saved") return json(await sessionSaved(db, String(hb.session_id || ""), String(hb.author || "")));
     return json({ error: "unknown hook" }, 400);
   }
@@ -112,10 +117,21 @@ async function feedback(db: SupabaseClient, me: Member, id: string) {
 }
 
 async function fail(db: SupabaseClient, f: any, me: Member, msg: string) {
-  await db.from("feedback_requests").update({ error: msg, tries: (f.tries || 0) + 1 }).eq("id", f.id);
-  // 자동 답변이 안 되면 희주가 Claude에게 "피드백 확인해줘"로 처리할 수 있게 알린다
-  await pushAdmins(db, "admin-fb", "", { title: "자동 피드백 실패", body: me.display_name + " 님 요청: " + msg.slice(0, 80) + " · Claude에게 '피드백 확인해줘'라고 해 주세요.", url: "/", tag: "fail-" + f.id });
-  return { status: "pending", error: msg };
+  const tries = (f.tries || 0) + 1;
+  await db.from("feedback_requests").update({ error: msg, tries }).eq("id", f.id);
+  // 자동 재시도(10분마다)가 남아 있으면 조용히 기다리고, 마지막까지 실패했을 때만 희주에게 알린다
+  if (tries >= MAX_TRIES)
+    await pushAdmins(db, "admin-fb", "", { title: "자동 피드백 실패", body: me.display_name + " 님 요청: " + msg.slice(0, 80) + " · 정밀 검토 루틴이 대신 답해요. 급하면 '피드백 확인해줘'.", url: "/", tag: "fail-" + f.id });
+  return { status: "pending", error: msg, tries };
+}
+
+// pg_cron이 10분마다 부른다: 실패한 요청을 요청한 사람 이름으로 다시 시도
+async function feedbackRetry(db: SupabaseClient, id: string) {
+  const { data: f } = await db.from("feedback_requests").select("id,author,answered_at,claude_answered_at,tries").eq("id", id).maybeSingle();
+  if (!f || f.answered_at || f.claude_answered_at || (f.tries || 0) >= MAX_TRIES) return { status: "skip" };
+  const { data: me } = await db.from("members").select("email,display_name,is_admin").eq("email", f.author).maybeSingle();
+  if (!me) return { status: "skip" };
+  return await feedback(db, me as Member, id);
 }
 
 type Target = { kind: string; dir: string; lang: "en" | "ko"; context: string; source: string; mine: string; model: any };
@@ -177,16 +193,25 @@ ${model}
     },
   };
   let last = "";
+  const busy = (st: number) => st === 503 || st === 429 || st === 500;
   for (const m of MODELS) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify(payload),
-    });
-    if (r.status === 404) { last = `모델 ${m} 없음`; continue; }
+    let r: Response | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify(payload),
+      });
+      if (!busy(r.status) || attempt === 1) break;
+      await r.body?.cancel();
+      await new Promise((ok) => setTimeout(ok, 2000));  // 순간 혼잡은 몇 초면 풀린다
+    }
+    if (!r) continue;
+    if (r.status === 404) { last = `모델 ${m} 없음`; await r.body?.cancel(); continue; }
+    if (busy(r.status)) { last = r.status === 429 ? "Gemini 무료 한도를 넘었어요." : `Gemini가 붐벼요(${r.status}).`; await r.body?.cancel(); continue; }
     if (!r.ok) {
       const txt = await r.text();
-      throw new Error(r.status === 429 ? "Gemini 무료 한도를 넘었어요. 잠시 뒤 다시 시도해 주세요." : `Gemini 오류 ${r.status}: ${txt.slice(0, 150)}`);
+      throw new Error(`Gemini 오류 ${r.status}: ${txt.slice(0, 150)}`);
     }
     const j = await r.json();
     const text = j?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") || "";
@@ -196,7 +221,7 @@ ${model}
     out.mistakes = Array.isArray(out.mistakes) ? out.mistakes.slice(0, 3) : [];
     return out as { answer: string; mistakes: Mistake[] };
   }
-  throw new Error(last || "사용할 수 있는 Gemini 모델이 없어요.");
+  throw new Error((last || "사용할 수 있는 Gemini 모델이 없어요.") + " 10분 뒤 자동으로 다시 시도해요.");
 }
 
 // 같은 사람의 같은 실수(대소문자·공백 무시)가 있으면 횟수만 올린다
