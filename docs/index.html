@@ -270,6 +270,8 @@ details.sess>summary::-webkit-details-marker{display:none}
 .chip.lv-실전{background:var(--ko-soft);color:var(--ko)}
 .model{border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
 .fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.fb-box{display:grid;gap:8px;margin-top:14px;padding:12px;border:1px dashed var(--line);border-radius:12px}
+.fb-confirm{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
 .fb.done{display:grid;gap:6px;background:var(--en-soft);border-radius:10px;padding:12px 14px}
 .fb-body{white-space:pre-wrap;font-size:14px;line-height:1.65}
 .fb.done.claude{background:var(--ko-soft)}
@@ -803,7 +805,11 @@ function modelHTML(model,lang,openKey,id){
 function fbBlock(type,id){
   if(!S.canWrite)return "";
   const f=S.feedback.find(x=>x.target_type===type&&x.target_id===id&&x.author===S.uid);
-  if(!f)return '<div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">⚡ AI에게 바로 묻기</button><button class="btn small" data-action="fb-claude-new" data-type="'+type+'" data-id="'+esc(id)+'">🔍 Claude 정밀 검토</button>'+
+  // 추천 표현을 접으면 그 자리로 버튼이 올라와 잘못 눌리기 쉬워서, 따로 묶은 칸에 두고 정밀 검토는 한 번 더 확인한다
+  const ck="new:"+type+":"+id;
+  if(!f)return '<div class="fb-box"><p class="sub" style="margin:0">피드백 받기</p><div class="fb"><button class="btn small" data-action="fb-req" data-type="'+type+'" data-id="'+esc(id)+'">⚡ AI에게 바로 묻기</button>'+
+    (S.claudeAsk===ck?'<span class="fb-confirm">🔍 정밀 검토를 요청할까요? <button class="btn small primary" data-action="fb-claude-new" data-type="'+type+'" data-id="'+esc(id)+'">요청</button><button class="link" data-action="fb-claude-no">취소</button></span>'
+      :'<button class="btn small" data-action="fb-claude-ask" data-k="'+esc(ck)+'">🔍 Claude 정밀 검토</button>')+'</div>'+
     '<span class="note">⚡ Gemini가 몇 초 만에 설명해요. 🔍 Claude가 더 깊게 봐요(하루 3번 답이 달려요).</span></div>';
   let h="";
   // ① Gemini 즉시 답
@@ -820,9 +826,11 @@ function fbBlock(type,id){
     const v=f.claude_verdict==="ok"?'<span class="chip done">Gemini 설명 검수 ✓</span>':f.claude_verdict==="fixed"?'<span class="chip bad">Gemini 설명을 바로잡았어요</span>':'';
     h+='<div class="fb done claude"'+(f.claude_seen_at?'':' data-claude-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">🔍 Claude 정밀 검토 <span class="note">· '+esc(fmtTime(f.claude_answered_at))+'</span> '+v+'</p><div class="fb-body">'+esc(f.claude_answer)+'</div></div>';
   }else if(f.claude_requested_at){
-    h+='<div class="fb wait"><span class="chip">🔍 Claude 정밀 검토 대기 · '+esc(fmtTime(f.claude_requested_at))+'</span><span class="note">오전 9시·오후 1시·밤 9시쯤 답이 달리고, 도착하면 알림이 가요.</span></div>';
+    h+='<div class="fb wait"><span class="chip">🔍 Claude 정밀 검토 대기 · '+esc(fmtTime(f.claude_requested_at))+'</span><span class="note">오전 9시·오후 1시·밤 9시쯤 답이 달리고, 도착하면 알림이 가요.</span><button class="link" data-action="fb-claude-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
   }else if(f.answered_at&&f.by!=="claude"){
-    h+='<div class="fb"><button class="btn small" data-action="fb-claude" data-id="'+esc(f.id)+'">🔍 Claude 정밀 검토 요청</button><span class="note">더 깊게 보고, Gemini 설명이 맞는지도 확인해 줘요.</span></div>';
+    const ck2="req:"+f.id;
+    h+='<div class="fb">'+(S.claudeAsk===ck2?'<span class="fb-confirm">🔍 정밀 검토를 요청할까요? <button class="btn small primary" data-action="fb-claude" data-id="'+esc(f.id)+'">요청</button><button class="link" data-action="fb-claude-no">취소</button></span>'
+      :'<button class="btn small" data-action="fb-claude-ask" data-k="'+esc(ck2)+'">🔍 Claude 정밀 검토 요청</button><span class="note">더 깊게 보고, Gemini 설명이 맞는지도 확인해 줘요.</span>')+'</div>';
   }
   if(f.answered_at||f.claude_answered_at)h+='<div class="row-actions"><button class="link" data-action="fb-again" data-id="'+esc(f.id)+'" data-type="'+type+'" data-tid="'+esc(id)+'">번역을 고쳤다면 다시 묻기</button></div>';
   return h;
@@ -1358,13 +1366,22 @@ document.addEventListener("click",async e=>{
   else if(a==="npref-open"){S.open.add("npref");renderBell();const d=document.querySelector(".npref");if(d)d.scrollIntoView({behavior:"smooth",block:"nearest"})}
   else if(a==="notify-kind"){setNotify(b.dataset.kind,b.checked)}
   else if(a==="sess-open"){openSession(id)}
-  else if(a==="fb-claude"){
+  else if(a==="fb-claude-ask"){S.claudeAsk=b.dataset.k;render();return}
+  else if(a==="fb-claude-no"){S.claudeAsk=null;render();return}
+  else if(a==="fb-claude-cancel"){
+    // 잘못 눌렀을 때 되돌리기: Gemini 답이 없으면 요청째 지우고, 있으면 정밀 검토 요청만 거둔다
+    const f=S.feedback.find(x=>x.id===id);if(!f)return;
+    if(!f.answered_at)await write(()=>S.sb.from("feedback_requests").delete().eq("id",id),"정밀 검토 요청을 취소했어요.");
+    else await write(()=>S.sb.from("feedback_requests").update({claude_requested_at:null}).eq("id",id),"정밀 검토 요청을 취소했어요.");
+    await reload("feedback");return;
+  }
+  else if(a==="fb-claude"){S.claudeAsk=null;
     const now=new Date().toISOString();
     const r=await S.sb.from("feedback_requests").update({claude_requested_at:now}).eq("id",id);
     if(r.error){flash("요청하지 못했어요.");return}
     await reload("feedback");callAssist({action:"claude-requested",id});flash("Claude 정밀 검토를 요청했어요. 답이 달리면 알림이 가요.");
   }
-  else if(a==="fb-claude-new"){
+  else if(a==="fb-claude-new"){S.claudeAsk=null;
     const {data,error}=await S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id,claude_requested_at:new Date().toISOString()}).select("id").single();
     if(error){flash("요청하지 못했어요.");return}
     await reload("feedback");callAssist({action:"claude-requested",id:data.id});flash("Claude 정밀 검토를 요청했어요. 답이 달리면 알림이 가요.");
