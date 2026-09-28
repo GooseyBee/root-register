@@ -93,6 +93,22 @@ details.sess>summary .pst-row{margin:0}
 /* 넓은 화면에서는 오른쪽에 늘 펼쳐 둔다 */
 @media (min-width:1240px){.dict{top:96px;bottom:auto}.dict:not(.closed) .dict-box{display:grid}.dict:not(.closed) .dict-fab{display:none}.dict.closed .dict-box{display:none}.dict.closed .dict-fab{display:block}.dict-box{width:260px}
   body:has(.dict:not(.closed)) .wrap{margin-left:max(0px,calc((100vw - 880px - 324px)/2));margin-right:308px}}
+.sel-bar{position:absolute;z-index:45;display:flex;gap:6px}
+.sel-bar .dict-sel{position:static}
+.hl-btn{border-color:#E8B400;color:#8a6a00}
+mark.hl{background:color-mix(in srgb,#FFD43B 55%,transparent);color:inherit;border-radius:3px;padding:0 1px}
+.hl-wrap{display:grid;gap:10px}
+.hl-list{display:grid;gap:8px;align-content:start;border-left:3px solid #FFD43B;padding-left:12px}
+.hl-item{display:grid;gap:2px;font-size:14px}.hl-q,.hl-n,.hl-ctx{margin:0}.hl-ctx{font-size:12px;color:var(--muted)}.hl-n{white-space:pre-wrap}
+.hl-foot{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.hl-pop{position:fixed;z-index:60;left:50%;bottom:16px;transform:translateX(-50%);width:min(420px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:14px;display:grid;gap:8px}
+.hl-pop textarea{min-height:80px;font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.hl-quote{margin:0;font-weight:600}
+.notes-head{display:grid;gap:4px;margin-bottom:6px}.notes-day{margin:14px 0 4px}
+#panel .hl-item+.hl-item{border-top:1px solid var(--line);padding-top:8px}
+.stats .stat-link{font:inherit;border:1px solid var(--line);background:var(--surface);color:inherit;border-radius:999px;padding:5px 11px;cursor:pointer}
+/* 넓은 화면에서는 노션처럼 메모를 문장 오른쪽에 */
+@media (min-width:900px){.hl-wrap:has(.hl-list){grid-template-columns:minmax(0,1fr) 260px;align-items:start}}
 .dict-sel{position:absolute;z-index:45;border:1px solid var(--en);background:var(--surface);color:var(--en);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);box-shadow:var(--shadow);cursor:pointer}
 .turn-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:10px 14px;border-radius:var(--r);border:1px solid var(--warn);border-left-width:5px;background:color-mix(in srgb,var(--warn) 12%,var(--surface));font-size:14px}
 .turn-bar .btn{margin-left:auto}
@@ -393,7 +409,9 @@ details.add .brief-card form.cmt-form{display:flex;padding:0;gap:8px}
       <div class="dict-recent" id="dict-recent"></div>
     </div>
   </aside>
-  <button id="dict-sel" class="dict-sel" hidden>📖 네이버 사전</button>
+  <div id="sel-bar" class="sel-bar" hidden><button id="dict-sel" class="dict-sel">📖 네이버 사전</button><button id="hl-sel" class="dict-sel hl-btn">🖍 메모</button></div>
+  <!-- 하이라이트 메모 입력창: 문장에서 단어·숙어를 고르고 🖍 메모를 누르면 뜬다 -->
+  <div id="hl-pop" class="hl-pop" hidden><p class="sub" style="margin:0">🖍 메모 <span class="note">(나만 봐요)</span></p><p class="hl-quote" id="hl-quote"></p><textarea id="hl-note" placeholder="뜻, 뉘앙스, 비슷한 표현, 기억할 점"></textarea><div class="row-actions"><button class="btn small primary" id="hl-save">저장</button><button class="link" id="hl-cancel">취소</button></div></div>
   <dialog id="cfm" class="cfm" aria-labelledby="cfm-title">
     <p id="cfm-title" class="cfm-title"></p>
     <p id="cfm-what" class="cfm-what"></p>
@@ -409,7 +427,7 @@ const DOMAINS=["일반","마케팅·브랜드","비즈니스·IR","시사·테�
 const REGISTERS=["구어","문어","전문"];
 const LEVELS=["쉬움","보통","실전"];
 const INTERVAL={1:1,2:2,3:4,4:8,5:16};
-const TABS=["daily","drills","sessions","review","terms","taglines","requests","names"];
+const TABS=["daily","drills","sessions","review","terms","taglines","requests","names","notes"];  // notes: 내 메모 모아 보기(탭 버튼 없이 링크로 연다)
 // 이름 정하기는 투표 기간에만 쓰는 임시 메뉴. 투표가 끝나면 false 로 바꾸면 탭이 사라진다(데이터는 남는다).
 const SHOW_NAMING=true;
 if(!SHOW_NAMING){TABS.splice(TABS.indexOf("names"),1);document.querySelector('#tabs [data-tab="names"]')?.remove();document.querySelector('#tabs .tab-sep')?.remove()}
@@ -425,7 +443,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],hls:[],hlFilter:"all",notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -495,7 +513,7 @@ function renderStats(){
   const due=S.terms.length?dueTerms().length:0;
   const ready=S.dbState==="ready";$("#stats").hidden=!ready;$("#tabs").hidden=!ready;
   $("#stats").innerHTML=
-    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>교차번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>카피 <b>'+S.taglines.filter(t=>t.addedBy===S.uid).length+'</b></span>';
+    '<span>오늘 복습 <b>'+due+'</b></span><span>용어 <b>'+S.terms.length+'</b></span><span>번역 연습 <b>'+S.drillStatus.filter(x=>x.author===S.uid).length+'</b>/'+S.drills.length+'</span><span>즐겨찾기 <b>'+S.favs.size+'</b></span><button class="stat-link" data-action="goto-notes">🖍 메모 <b>'+S.hls.length+'</b></button><span>건의 <b>'+S.requests.filter(r=>OPEN_ST.includes(r.status)).length+'</b></span><span>교차번역 <b>'+new Set(S.sessions.map(x=>x.no)).size+'</b>/12회</span><span>카피 <b>'+S.taglines.filter(t=>t.addedBy===S.uid).length+'</b></span>';
   for(const b of document.querySelectorAll("#tabs button"))b.setAttribute("aria-selected",String(b.dataset.tab===S.tab));
   renderBell();
   {const n=S.requests.filter(r=>r.status==="new").length,bd=$("#req-badge");if(bd){bd.textContent=n;bd.hidden=!n;bd.title="새 건의 "+n+"개"}}
@@ -514,7 +532,7 @@ function render(){
   else if(S.dbState==="notmember")h+='<div class="login"><h2>등록되지 않은 계정이에요</h2><p class="note">'+esc(S.uid)+' 계정은 멤버 목록에 없어요. 함께 공부하는 사람에게 멤버로 추가해 달라고 요청하세요.</p><div class="row-actions"><button class="btn" data-action="logout">다른 이메일로 로그인</button></div></div>';
   else{
     if(!S.canWrite)h+='<div class="banner">읽기 전용으로 보고 있어요. 기록하려면 소유자에게 편집 권한을 요청하세요.</div>';
-    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests,names:vNames})[S.tab]();
+    h+=({daily:vDaily,drills:vDrills,review:vReview,terms:vTerms,sessions:vSessions,taglines:vTaglines,requests:vRequests,names:vNames,notes:vNotes})[S.tab]();
   }
   $("#panel").innerHTML=h;
   if(S.dbState==="ready")markSeenVisible();
@@ -620,8 +638,8 @@ function vSessions(){
     const vers=s.versions||{},mine=S.uid?vers[S.uid]:"";
     const others=Object.keys(vers).filter(k=>k!==S.uid&&vers[k]);
     const pp=sessPair(s);
-    return '<details class="sess pair-'+pp.st+'" data-key="'+key+'"'+(open?" open":"")+'><summary>'+(pp.st!=="none"?'<span class="pst-row">'+pairBadge(pp.st,pp.others)+'</span>':'')+'<span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
-      '<div class="sbody"><div><p class="sub">원문</p><p class="src">'+esc(s.source)+'</p></div>'+
+    return '<details class="sess pair-'+pp.st+'" data-hl="session:'+esc(s.id)+'" data-key="'+key+'"'+(open?" open":"")+'><summary>'+(pp.st!=="none"?'<span class="pst-row">'+pairBadge(pp.st,pp.others)+'</span>':'')+'<span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
+      '<div class="sbody"><div><p class="sub">원문</p><div class="hl-wrap"><p class="src">'+markQuotes(s.source,"session",s.id)+'</p>'+hlList("session",s.id)+'</div></div>'+
       '<div><p class="sub">번역</p><div class="vers">'+
         (S.canWrite&&S.uid?myVersion(s,mine):(mine?'<div class="ver">'+whoHTML(S.uid)+'<p>'+esc(mine)+'</p></div>':""))+
         others.map(k=>'<div class="ver">'+whoHTML(k)+'<p>'+esc(vers[k])+'</p></div>').join("")+
@@ -1045,6 +1063,49 @@ function vReports(){
     (list.length>1?'<p class="sub" style="margin:8px 0 0">지난 리포트</p>'+list.slice(1).map(r=>'<details class="past-report"><summary>'+esc(fmtDay(r.week_of))+' 주</summary><div class="fb-body">'+esc(r.body)+'</div></details>').join(""):'')+
     '</div></details>';
 }
+// ---------- 하이라이트 메모 (나만 봐요) ----------
+const myHls=(type,id)=>S.hls.filter(h=>h.author===S.uid&&h.target_type===type&&h.target_id===id);
+// 원문에서 메모한 단어·숙어에 형광펜 표시. 긴 것부터 칠해서 짧은 것이 긴 것을 쪼개지 않게 한다
+function markQuotes(text,type,id){
+  let h=esc(text||"");
+  const qs=[...new Set(myHls(type,id).map(x=>x.quote))].sort((a,b)=>b.length-a.length);
+  for(const q of qs){const e=esc(q);if(e&&h.includes(e)&&!h.includes('<mark class="hl">'+e))h=h.split(e).join('<mark class="hl">'+e+'</mark>')}
+  return h;
+}
+function hlItem(x,withCtx){
+  return '<div class="hl-item">'+(withCtx?'<p class="hl-ctx">'+esc(targetLabel(x.target_type,x.target_id))+'</p>':'')+
+    '<p class="hl-q"><mark class="hl">'+esc(x.quote)+'</mark></p>'+(x.note?'<p class="hl-n">'+esc(x.note)+'</p>':'')+
+    '<div class="hl-foot"><span class="ntime">'+esc(when(x.updated_at||x.created_at))+'</span>'+
+    (withCtx?'<button class="link" data-action="hl-go" data-type="'+esc(x.target_type)+'" data-id="'+esc(x.target_id)+'">문장으로 가기</button>':'')+
+    '<button class="link" data-action="hl-edit" data-id="'+esc(x.id)+'">수정</button>'+askDel("삭제",{do:"del",col:"highlights",id:x.id,what:"메모 ‘"+cut(x.quote,20)+"’"})+'</div></div>';
+}
+function hlList(type,id){
+  const l=myHls(type,id);if(!l.length)return "";
+  return '<div class="hl-list"><p class="sub" style="margin:0">🖍 내 메모 '+l.length+'</p>'+l.map(x=>hlItem(x,false)).join("")+'</div>';
+}
+function openHl(o){
+  S.hlDraft=o;$("#hl-quote").textContent=o.quote;$("#hl-note").value=o.note||"";
+  const pop=$("#hl-pop");pop.hidden=false;setTimeout(()=>$("#hl-note").focus(),0);
+}
+async function saveHl(){
+  const o=S.hlDraft;if(!o)return;const note=$("#hl-note").value.trim();
+  const r=o.hid?await S.sb.from("highlights").update({note,updated_at:new Date().toISOString()}).eq("id",o.hid)
+    :await S.sb.from("highlights").insert({target_type:o.type,target_id:o.id,quote:o.quote,note});
+  if(r.error){flash("메모를 저장하지 못했어요.");return}
+  $("#hl-pop").hidden=true;S.hlDraft=null;window.getSelection()?.removeAllRanges();
+  flash(o.hid?"메모를 고쳤어요.":"메모를 남겼어요. 🖍 메모에서 모아 볼 수 있어요.");await reload("feedback");
+}
+// 내 메모 모아 보기: 최근 것부터, 날짜별로 묶는다
+function vNotes(){
+  const l=S.hls.filter(h=>h.author===S.uid&&(S.hlFilter==="all"||h.target_type===S.hlFilter));
+  let h='<div class="notes-head"><h2 style="margin:0">🖍 내 메모</h2><span class="note">번역 연습·교차번역 문장에서 단어나 숙어를 드래그(폰은 길게 눌러 선택)하고 🖍 메모를 누르면 여기 모여요. 나만 봐요.</span></div>'+
+    '<div class="rv-top"><div class="seg" role="group" aria-label="종류">'+[["all","전체"],["drill","번역 연습"],["session","교차번역"]].map(([k,t])=>'<button data-action="hl-filter" data-v="'+k+'" aria-pressed="'+(S.hlFilter===k)+'">'+t+'</button>').join("")+'</div></div>';
+  if(!l.length)return h+'<div class="empty">아직 메모가 없어요.</div>';
+  const day=t=>new Date(t).toLocaleDateString("ko-KR",{timeZone:"Asia/Seoul",month:"long",day:"numeric",weekday:"short"});
+  let cur="";
+  for(const x of l){const d=day(x.created_at);if(d!==cur){h+='<p class="sub notes-day">'+esc(d)+'</p>';cur=d}h+=hlItem(x,true)}
+  return h;
+}
 function vMistakes(){
   const list=S.mistakes.filter(m=>m.author===S.uid).sort((a,b)=>b.count-a.count||String(b.last_seen).localeCompare(String(a.last_seen)));
   const body=list.length?'<ol class="mistakes">'+list.map(m=>'<li><div class="mk-row"><span class="mk-wrong" lang="'+esc(m.lang)+'">'+esc(m.wrong)+'</span><span aria-hidden="true">→</span><span class="mk-better" lang="'+esc(m.lang)+'">'+esc(m.better)+'</span>'+(m.count>1?'<span class="chip bad">'+m.count+'번</span>':"")+'</div>'+(m.why?'<p class="note" style="margin:0">'+esc(m.why)+'</p>':"")+'</li>').join("")+'</ol>'
@@ -1059,7 +1120,7 @@ function vDrillGuide(){
       '<li>주제를 고르고 <b>내 번역</b>을 써서 <b>제출</b>해요. 제출하면 잠기고, 고치려면 <b>수정</b>을 눌러요.</li>'+
       '<li>제출하면 <b>추천 표현</b>이 열려요. 상대도 제출했다면 상대 번역도 보여요.</li>'+
       '<li>왜 틀렸는지 궁금하면 두 가지로 물어볼 수 있어요. <b>⚡ AI에게 바로 묻기</b>는 Gemini가 몇 초 만에 답해요. <b>🔍 Claude 정밀 검토</b>는 Claude가 더 깊게 보고 Gemini 설명이 맞는지도 확인해요. 정밀 검토는 하루 3번(오전 9시·오후 1시·밤 9시쯤) 답이 달리고, 도착하면 알림이 가요.</li>'+
-      '<li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
+      '<li>문장에서 단어나 숙어를 드래그(폰은 길게 눌러 선택)하고 <b>🖍 메모</b>를 누르면 형광펜과 메모가 남아요. 나만 보고, 위쪽 <b>🖍 메모</b>에서 모아 볼 수 있어요.</li><li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
     '</ol>'+
     '<p class="note" style="margin:0">카드 왼쪽 색: <b>주황 ✋</b> 상대가 먼저 제출(내 차례), <b>초록 ✓</b> 둘 다 제출, <b>파랑</b> 나만 제출. <b>✋ 내 차례</b>를 누르면 그 문장만 모아 봐요. 교차번역도 같아요.</p>'+
     '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
@@ -1093,7 +1154,7 @@ function vDrills(){
     const forMe=d.for_author===S.uid,forOther=d.for_author&&!forMe;
     const pchip=forMe?'<span class="chip bad">나를 위한 문장'+(d.focus?' · '+esc(d.focus):'')+'</span> ':forOther?'<span class="chip">'+esc((S.names[d.for_author]&&S.names[d.for_author].name)||"")+' 맞춤</span> ':'';
     const st=dState(d),oth=members.filter(m=>m!==S.uid&&submitted(d.id,m));
-    let c='<article class="card drill pair-'+st+'" id="drill-'+esc(d.id)+'">'+(st!=="none"?'<div class="pst-row">'+pairBadge(st,oth)+'</div>':'')+'<p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
+    let c='<article class="card drill pair-'+st+'" id="drill-'+esc(d.id)+'" data-hl="drill:'+esc(d.id)+'">'+(st!=="none"?'<div class="pst-row">'+pairBadge(st,oth)+'</div>':'')+'<p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><div class="hl-wrap"><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+markQuotes(d.source||d.ko,"drill",d.id)+'</p>'+hlList("drill",d.id)+'</div>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
     if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
@@ -1403,6 +1464,14 @@ document.addEventListener("click",async e=>{
   else if(a==="req-done-open"){openRequest(id)}
   else if(a==="notif-read-all"){markRead(notifItems().filter(x=>!x.read).map(x=>x.key))}
   else if(a==="fb-seen-all"){const ids=unseenFb().map(f=>f.id),now=new Date().toISOString();for(const f of S.feedback)if(ids.includes(f.id))f.seen_at=now;if(ids.length)S.sb.from("feedback_requests").update({seen_at:now}).in("id",ids).then(()=>{});renderBell()}
+  else if(a==="goto-notes"){setTab("notes")}
+  else if(a==="hl-filter"){S.hlFilter=b.dataset.v;render()}
+  else if(a==="hl-edit"){const x=S.hls.find(h=>h.id===id);if(x)openHl({hid:x.id,quote:x.quote,note:x.note})}
+  else if(a==="hl-go"){
+    if(b.dataset.type==="session")openSession(id);
+    else{const d=S.drills.find(x=>x.id===id);if(d){S.drillDir=d.dir||"KR→EN";S.drillTopic=d.topic;S.drillFilter="all"}setTab("drills");
+      requestAnimationFrame(()=>{const el=document.getElementById("drill-"+id);if(el)el.scrollIntoView({behavior:"smooth",block:"start"})})}
+  }
   else if(a==="goto-requests"){S.notifOpen=false;S.reqFilter="open";setTab("requests")}
   else if(a==="push-on"){pushOn()}
   else if(a==="push-off"){pushOff()}
@@ -1492,19 +1561,26 @@ document.addEventListener("click",e=>{
 });
 document.addEventListener("submit",e=>{if(e.target.dataset.form==="dict"){e.preventDefault();e.stopImmediatePropagation();openDict($("#dict-q").value)}},true);
 // 본문에서 단어를 드래그(폰은 길게 눌러 선택)하면 작은 사전 버튼을 띄운다
-{let t;const sel=$("#dict-sel");
- const hide=()=>{sel.hidden=true};
+// 번역 연습·교차번역 카드 안이면 🖍 메모 버튼도 같이 띄운다(하이라이트 메모)
+{let t;const bar=$("#sel-bar"),sel=$("#dict-sel"),hl=$("#hl-sel");
+ const hide=()=>{bar.hidden=true};
  document.addEventListener("selectionchange",()=>{clearTimeout(t);t=setTimeout(()=>{
-   const s=window.getSelection(),txt=s?String(s).trim():"";
-   if(!s||s.isCollapsed||!txt||txt.length>40||txt.includes("\n"))return hide();
+   const s=window.getSelection(),txt=s?String(s).replace(/\s+/g," ").trim():"";
+   if(!s||s.isCollapsed||!txt||txt.length>120)return hide();
    const n=s.anchorNode&&(s.anchorNode.nodeType===1?s.anchorNode:s.anchorNode.parentElement);
    if(!n||!n.closest("#panel")||n.closest("input,textarea"))return hide();
+   const host=n.closest("[data-hl]");
+   sel.hidden=txt.length>40;hl.hidden=!host||!S.canWrite;
+   if(sel.hidden&&hl.hidden)return hide();
    const r=s.getRangeAt(0).getBoundingClientRect();
-   sel.style.left=Math.max(8,Math.min(window.scrollX+r.left,window.scrollX+document.documentElement.clientWidth-150))+"px";
-   sel.style.top=(window.scrollY+r.bottom+8)+"px";sel.dataset.q=txt;sel.hidden=false;
+   bar.style.left=Math.max(8,Math.min(window.scrollX+r.left,window.scrollX+document.documentElement.clientWidth-240))+"px";
+   bar.style.top=(window.scrollY+r.bottom+8)+"px";bar.dataset.q=txt;bar.dataset.hl=host?host.dataset.hl:"";bar.hidden=false;
  },250)});
- sel.addEventListener("mousedown",e=>e.preventDefault());  // 누를 때 선택이 풀리지 않게
- sel.addEventListener("click",()=>{openDict(sel.dataset.q);hide()});
+ for(const b of [sel,hl])b.addEventListener("mousedown",e=>e.preventDefault());  // 누를 때 선택이 풀리지 않게
+ sel.addEventListener("click",()=>{openDict(bar.dataset.q);hide()});
+ hl.addEventListener("click",()=>{const [type,...rest]=bar.dataset.hl.split(":");openHl({type,id:rest.join(":"),quote:bar.dataset.q.slice(0,200)});hide()});
+ $("#hl-cancel").addEventListener("click",()=>{$("#hl-pop").hidden=true;S.hlDraft=null});
+ $("#hl-save").addEventListener("click",saveHl);
  try{if(localStorage.getItem("rr-dict-closed"))$("#dict").classList.add("closed")}catch(_){}
  renderDictRecent();
 }
@@ -1638,6 +1714,7 @@ const loaders={
     S.feedback=a.error?[]:a.data;S.mistakes=b.error?[]:b.data;
     {const {data:r,error}=await S.sb.from("weekly_reports").select("*").order("week_of",{ascending:false});S.reports=error?[]:(r||[])}
     {const {data:p}=await S.sb.from("notify_prefs").select("off").maybeSingle();S.notifyOff=(p&&p.off)||[]}
+    {const {data:h,error}=await S.sb.from("highlights").select("*").order("created_at",{ascending:false});S.hls=error?[]:(h||[])}
     {const {data:r}=await S.sb.from("notif_reads").select("key").gte("read_at",new Date(Date.now()-30*864e5).toISOString());for(const x of r||[])S.nreads.add(x.key)}  // 합치기: 방금 누른 읽음이 저장되기 전에 다시 불러와도 지워지지 않게
     if(S.isAdmin){const {data:q,error}=await S.sb.rpc("feedback_queue");S.fbQueue=error?[]:(q||[])}
   },
@@ -1649,7 +1726,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",weekly_reports:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",weekly_reports:"feedback",highlights:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));
