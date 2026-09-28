@@ -95,7 +95,8 @@ details.sess>summary .pst-row{margin:0}
   body:has(.dict:not(.closed)) .wrap{margin-left:max(0px,calc((100vw - 880px - 324px)/2));margin-right:308px}}
 .dict-sel{position:absolute;z-index:45;border:1px solid var(--en);background:var(--surface);color:var(--en);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);box-shadow:var(--shadow);cursor:pointer}
 .turn-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:10px 0;padding:10px 14px;border-radius:var(--r);border:1px solid var(--warn);border-left-width:5px;background:color-mix(in srgb,var(--warn) 12%,var(--surface));font-size:14px}
-.turn-bar .btn{margin-left:auto}.turn-bar.on{background:var(--surface)}
+.turn-bar .btn{margin-left:auto}
+.report-bar{width:100%;text-align:left;font:inherit;color:var(--ink);cursor:pointer;border-color:var(--en);background:var(--en-soft)}.turn-bar.on{background:var(--surface)}
 .tcount{display:inline-block;min-width:16px;margin-left:5px;padding:0 4px;border-radius:999px;background:var(--warn);color:#2a1d00;font:700 10px/16px var(--sans);text-align:center}
 .turn-only{border:1px solid var(--warn);background:var(--surface);border-radius:999px;padding:6px 12px;font:600 13px/1 var(--sans);color:var(--ink);cursor:pointer}
 .turn-only[aria-pressed="true"]{background:var(--warn);color:#2a1d00;border-color:var(--warn)}
@@ -759,10 +760,15 @@ function dailyBack(d){
     (words.length?'<p class="sub" style="margin:0">어려운 단어</p><dl class="dwords">'+words.map(w=>'<dt lang="en">'+esc(w.word)+'</dt><dd>'+esc(w.meaning)+(w.note?' · '+esc(w.note):"")+'</dd>').join("")+'</dl>':"")+
     (term?'<p class="note">출처 용어: <button class="link" data-action="goto-term" data-id="'+esc(term.id)+'">'+esc(term.word)+'</button></p>':"");
 }
+// 첫 화면에 새 주간 리포트 안내 (리포트는 번역 연습 탭 맨 위에 있어요)
+function reportBar(){
+  const r=S.reports.find(r=>r.author===S.uid&&!r.seen_at);
+  return r?'<button class="turn-bar report-bar" data-action="report-open">📋 <b>'+esc(fmtDay(r.week_of))+' 주 리포트가 도착했어요</b> · 번역 연습 탭 맨 위에 있어요 <span class="btn small">보기</span></button>':'';
+}
 function vDaily(){
   const d=S.daily;
-  if(!d)return '<div class="empty">'+esc(S.dailyErr||"오늘의 문장을 불러오는 중…")+'</div>';
-  let h='<article class="daily"><p class="dday">'+fmtDay(d.day)+' · TODAY\'S SENTENCE</p><p class="dsent" lang="en">'+esc(d.sentence)+'</p>';
+  if(!d)return reportBar()+'<div class="empty">'+esc(S.dailyErr||"오늘의 문장을 불러오는 중…")+'</div>';
+  let h=reportBar()+'<article class="daily"><p class="dday">'+fmtDay(d.day)+' · TODAY\'S SENTENCE</p><p class="dsent" lang="en">'+esc(d.sentence)+'</p>';
   if(!S.dailyOpen)h+='<button class="reveal" data-action="daily-open">뜻과 설명 보기</button>';
   else h+='<div class="back">'+dailyBack(d)+'<div><button class="link" data-action="daily-close">접기</button></div></div>';
   h+='<div class="social">'+starBtn("daily",d.day)+commentBlock("daily",d.day)+'</div></article>';
@@ -896,8 +902,15 @@ function targetLabel(type,id){
 function notifItems(){
   const nm=m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0];
   const week=Date.now()-7*864e5,recent=t=>t&&new Date(t).getTime()>week,it=[];
-  for(const x of sessWaiting())it.push({key:"nudge:"+x.s.id,at:x.at,action:"sess-open",id:x.s.id,title:"교차번역 "+x.s.no+"회차 · "+cut(x.s.title,30),
-    note:x.by.map(nm).join(", ")+" 님이 저장했어요. 내 번역을 저장하면 서로 비교할 수 있어요.",read:S.nreads.has("nudge:"+x.s.id)});
+  // 교차번역: 상대가 저장한 알림은 내가 저장한 뒤에도 7일 동안 확인한 알림에 남긴다(다른 기기에서 처리해도 사라지지 않게)
+  {const waitIds=new Set(sessWaiting().map(x=>x.s.id));
+   for(const s of S.sessions){
+     const o=S.sessStatus.filter(x=>x.session_id===s.id&&x.author!==S.uid);if(!o.length)continue;
+     const at=o.map(x=>x.updated_at||"").sort().pop(),mineDone=!waitIds.has(s.id)&&S.sessStatus.some(x=>x.session_id===s.id&&x.author===S.uid);
+     if(!waitIds.has(s.id)&&!(mineDone&&recent(at)))continue;
+     it.push({key:"nudge:"+s.id,at,action:"sess-open",id:s.id,title:"교차번역 "+s.no+"회차 · "+cut(s.title,30),
+       note:[...new Set(o.map(x=>nm(x.author)))].join(", ")+" 님이 저장했어요."+(mineDone?" 나도 저장했어요 ✓":" 내 번역을 저장하면 서로 비교할 수 있어요."),read:mineDone||S.nreads.has("nudge:"+s.id)});
+   }}
   for(const r of S.reports.filter(r=>r.author===S.uid&&(!r.seen_at||recent(r.created_at))))
     it.push({key:"rp:"+r.id,at:r.created_at,action:"report-open",title:"📋 "+fmtDay(r.week_of)+" 주 리포트",note:cut(r.body,70),read:!!r.seen_at});
   for(const f of S.feedback.filter(f=>f.author===S.uid&&f.claude_answered_at&&(!f.claude_seen_at||recent(f.claude_answered_at))))
@@ -908,7 +921,7 @@ function notifItems(){
   for(const r of S.requests.filter(r=>r.author===S.uid&&r.status==="done"&&(!r.done_seen_at||recent(r.updated_at))))
     it.push({key:"dn:"+r.id,at:r.updated_at,action:"req-done-open",id:r.id,title:"✓ 건의 완료 · "+cut(r.title,34),note:cut(r.claude_note||"처리 메모를 확인해 보세요.",70),read:!!r.done_seen_at});
   if(S.isAdmin){
-    for(const r of S.requests.filter(r=>r.author!==S.uid&&(r.status==="new"||(S.nreads.has("req:"+r.id)&&recent(r.created_at)))))
+    for(const r of S.requests.filter(r=>r.author!==S.uid&&(r.status==="new"||recent(r.created_at))))
       it.push({key:"req:"+r.id,at:r.created_at,action:"goto-requests",title:"새 건의 · "+nm(r.author),note:cut(r.title,70),read:S.nreads.has("req:"+r.id)||r.status!=="new"});
     for(const q of S.fbQueue.filter(q=>q.author!==S.uid)){
       const k="q:"+q.author+"|"+q.created_at,wait=(!q.answered_at&&!q.claude_requested_at)||(q.claude_requested_at&&!q.claude_answered_at);
@@ -953,7 +966,9 @@ function renderBell(){
   const pend=myPending();
   if(pend.length)h+='<div class="sec"><p class="sub">답변을 기다리는 내 요청</p>'+
     pend.map(f=>'<button class="nrow static-ish" data-action="fb-open" data-id="'+esc(f.id)+'"><b>'+esc(targetLabel(f.target_type,f.target_id))+'</b>'+tm(f.claude_requested_at&&!f.claude_answered_at?f.claude_requested_at:f.created_at)+'<span class="note">'+(f.claude_requested_at&&!f.claude_answered_at?'🔍 Claude 정밀 검토 대기 중':f.error?'자동 답변 실패: '+esc(cut(f.error,60)):'설명을 쓰는 중이에요.')+'</span></button>').join("")+'</div>';
-  if(read.length)h+='<details class="nread" data-key="nread"'+(S.open.has("nread")?" open":"")+'><summary>확인한 알림 '+read.length+' (최근 7일)</summary><div class="nread-list">'+read.map(nrowHTML).join("")+'</div></details>';
+  // 확인한 알림: 최근 5개는 바로 보이고, 나머지는 펼쳐서 본다 (다른 기기에서 읽은 알림도 여기 남아요)
+  if(read.length)h+='<div class="sec"><p class="sub">확인한 알림 <span class="note">(최근 7일)</span></p><div class="nread-list">'+read.slice(0,5).map(nrowHTML).join("")+'</div>'+
+    (read.length>5?'<details class="nread" data-key="nread"'+(S.open.has("nread")?" open":"")+'><summary>'+(read.length-5)+'개 더 보기</summary><div class="nread-list">'+read.slice(5).map(nrowHTML).join("")+'</div></details>':'')+'</div>';
   const ps={on:"이 기기에서 휴대폰 알림을 받고 있어요.",off:"휴대폰 알림이 꺼져 있어요.",denied:"브라우저에서 알림이 차단돼 있어요. 브라우저 설정에서 이 사이트의 알림을 허용해 주세요.",
     "ios-home":"아이폰은 Safari 공유 버튼 → '홈 화면에 추가'를 한 뒤, 홈 화면 아이콘으로 열어서 켜 주세요.",unsupported:"이 브라우저는 휴대폰 알림을 지원하지 않아요.",unknown:"알림 상태를 확인하는 중이에요."}[S.pushState]||"";
   h+='<div class="sec"><p class="sub">휴대폰 알림</p><div class="push-row"><span class="note">'+ps+'</span>'+
@@ -1354,7 +1369,7 @@ document.addEventListener("click",async e=>{
     if(error){flash("요청하지 못했어요.");return}
     await reload("feedback");callAssist({action:"claude-requested",id:data.id});flash("Claude 정밀 검토를 요청했어요. 답이 달리면 알림이 가요.");
   }
-  else if(a==="report-open"){S.notifOpen=false;S.open.add("reports");setTab("drills")}
+  else if(a==="report-open"){S.notifOpen=false;S.open.add("reports");setTab("drills");requestAnimationFrame(()=>{const el=document.querySelector('details[data-key="reports"]');if(el)el.scrollIntoView({behavior:"smooth",block:"start"})})}
   else if(a==="bell-toggle"){S.notifOpen=!S.notifOpen;if(S.notifOpen){refreshPush().then(renderBell);reload("feedback")}renderBell()}
   else if(a==="fb-open"){openFeedback(id)}
   else if(a==="bell-close"){S.notifOpen=false;renderBell()}
