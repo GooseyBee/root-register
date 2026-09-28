@@ -79,6 +79,7 @@ Root & Register에서 한 일을 **최신순**으로 적어요. 무엇을 했는
 
 - 이름 정하기 탭에 새 후보 4개를 올리고, CROSSLINGO·FLIPTALK에는 "⚠ 같은 이름 사용 중" 설명을 달았어요.
 - **왜**: 영어 합성어(Cross·Flip·Lingo·Talk)는 대부분 이미 쓰여서, 두 분이 좋아한 방향(교차·뒤집기·다리)은 살리되 "결(grain)"처럼 이 앱만의 말을 붙여 겹치지 않게 했어요.
+- (보충) 혜림 님 코멘트("뜻을 다 담지 않아도, 뉘앙스·입에 붙는 말·세련됨·위트, Root to shoot처럼 맛있게")를 반영해 **Word for Word-ish, 말이 되네, 말맛집, 뉘앙스 맛집, Tone & Tongue, Swap & Say**를 추가. Root to Shoot·Glossed & Found·Nuance & Nonsense·Tongue in Chic·Say It Twice는 사용 중이라 뺐고, 전에 올린 Flip & Fit에는 ⚠ 표시.
 - 한계: 웹 검색(미국 기준)으로 확인한 범위라 한국 상표·도메인까지 다 본 건 아니에요. 최종 후보가 정해지면 상표 검색(KIPRIS)과 도메인을 한 번 더 확인해요.
 
 ## 2026-09-28 · 건의 반영: 하이라이트 메모와 메모 모아 보기

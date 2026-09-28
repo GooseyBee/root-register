@@ -7,3 +7,14 @@ insert into name_candidates (id, name, gloss, sort, shown, added_by) values
 ('nc-43','Crossfold','교차 + 접기',43,true,null),
 ('nc-44','Tonguebridge','두 언어 사이의 다리',44,true,null)
 on conflict (id) do nothing;  -- 이유(why)와 ⚠ 표시는 DB에만 있어요
+
+-- 3차 보충: 혜림 님 코멘트("뜻을 다 담지 않아도, 뉘앙스·입에 붙는 말·세련됨·위트, Root to shoot처럼 맛있게") 반영
+-- 사용 중이라 뺀 것: Root to Shoot(Root & Shoot Ventures, Roots & Shoots), Glossed & Found, Nuance & Nonsense, Tongue in Chic, Say It Twice. Flip & Fit에는 ⚠ 표시.
+insert into name_candidates (id, name, gloss, sort, shown, added_by) values
+('nc-45','Word for Word-ish','직역인 듯, 아닌 듯',45,true,null),
+('nc-46','말이 되네','말이 된다 = 통한다 + 말로 옮겨진다',46,true,null),
+('nc-47','말맛집','말맛 + 맛집',47,true,null),
+('nc-48','뉘앙스 맛집','뉘앙스를 잘 살리는 곳',48,true,null),
+('nc-49','Tone & Tongue','말투(격) + 언어',49,true,null),
+('nc-50','Swap & Say','바꿔서 말하기',50,true,null)
+on conflict (id) do nothing;
