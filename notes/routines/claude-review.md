@@ -30,7 +30,7 @@ left join sessions s on f.target_type='session' and s.id=f.target_id
 left join session_versions v on f.target_type='session' and v.session_id=f.target_id and v.author=f.author
 left join session_models sm on f.target_type='session' and sm.session_id=f.target_id
 where (f.claude_requested_at is not null and f.claude_answered_at is null)
-   or (f.answered_at is null and f.error <> '')   -- Gemini 자동 답변이 실패한 요청도 처리
+   or (f.answered_at is null and f.error <> '' and f.claude_answered_at is null)   -- Gemini 자동 답변이 실패한 요청도 처리(이미 Claude가 답한 건 제외)
 order by f.created_at;
 ```
 - [ ] 결과가 없으면 "대기 중인 요청 없음" 한 줄로 끝내요. 아무것도 쓰지 않아요.
