@@ -443,7 +443,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),reports:[],hls:[],hlFilter:"all",notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),pinDone:new Set(),reports:[],hls:[],hlFilter:"all",notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -610,6 +610,13 @@ function pairBadge(st,others){
   const n=others.map(m=>(S.names[m]&&S.names[m].name)||String(m).split("@")[0]).join(", ");
   return st==="turn"?'<span class="pst turn">✋ '+esc(n)+' 님 제출 · 내 차례</span>':st==="both"?'<span class="pst both">✓ 둘 다 제출 · 비교해 보세요</span>':st==="mine"?'<span class="pst mine">나만 제출 · 상대를 기다려요</span>':'';
 }
+// 콘텐츠 정렬: 내가 안 낸 것이 위, 그다음 최근에 올라온 묶음이 위.
+// 방금 제출한 카드는 추천 표현을 읽는 중에 아래로 튀지 않게, 탭을 옮기기 전까지 제자리에 둔다(S.pinDone).
+function doneLast(ai,as,bi,bs){
+  const d=(id,st)=>(st==="mine"||st==="both")&&!S.pinDone.has(id)?1:0;
+  return d(ai,as)-d(bi,bs);
+}
+const newer=(a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10));
 function sessPair(s){
   const done=S.sessStatus.filter(x=>x.session_id===s.id);
   const mine=done.some(x=>x.author===S.uid)||!!(S.uid&&s.versions&&String(s.versions[S.uid]||"").trim());
@@ -631,7 +638,7 @@ function vSessions(){
   {const t=S.sessions.filter(s=>sessPair(s).st==="turn");
    if(S.sessTurn)h+='<div class="turn-bar on">✋ 상대가 먼저 저장한 원문만 보는 중 ('+t.length+'개) <button class="link" data-action="sess-turn">전체 보기</button></div>';
    else if(t.length)h+='<div class="turn-bar">✋ <b>'+esc([...new Set(t.flatMap(s=>sessPair(s).others))].map(m=>(S.names[m]&&S.names[m].name)||"").join(", "))+' 님이 먼저 저장한 원문 '+t.length+'개</b> · '+esc([...new Set(t.map(s=>s.no+"회차"))].join(", "))+' <button class="btn small" data-action="sess-turn">모아 보기</button></div>'}
-  const list=S.sessions.filter(s=>(!S.sessTurn||sessPair(s).st==="turn")&&(!S.favOnly.sessions||isFav("session",s.id))&&(S.sessLevel==="all"||s.level===S.sessLevel)).slice().sort((a,b)=>(b.no||0)-(a.no||0)||LEVELS.indexOf(a.level)-LEVELS.indexOf(b.level)||String(b.dir).localeCompare(String(a.dir)));
+  const list=S.sessions.filter(s=>(!S.sessTurn||sessPair(s).st==="turn")&&(!S.favOnly.sessions||isFav("session",s.id))&&(S.sessLevel==="all"||s.level===S.sessLevel)).slice().sort((a,b)=>doneLast(a.id,sessPair(a).st,b.id,sessPair(b).st)||newer(a,b)||(b.no||0)-(a.no||0)||LEVELS.indexOf(a.level)-LEVELS.indexOf(b.level)||String(b.dir).localeCompare(String(a.dir)));
   if(!list.length)return h+'<div class="empty">이 난이도의 원문이 아직 없어요.</div>';
   return h+list.map((s,i)=>{
     const key="sess-"+s.id,open=S.open.has(key)||(!S.open.has("touched-sess")&&i<2);
@@ -1141,7 +1148,7 @@ function vDrills(){
     TOPICS.map(([k,l])=>{const n=turnCount(d=>d.topic===k);return '<button data-action="drill-topic" data-v="'+k+'" aria-pressed="'+(S.drillTopic===k)+'">'+l+(n?'<span class="tcount" title="내 차례">'+n+'</span>':'')+'</button>'}).join("")+'</div>'+
     '<div class="seg" role="group" aria-label="보기">'+[["all","전체"],["turn","✋ 내 차례"],["todo","미제출"],["fav","★"]].map(([k,l])=>'<button data-action="drill-filter" data-v="'+k+'" aria-pressed="'+(S.drillFilter===k)+'">'+l+'</button>').join("")+'</div></div>';
   const list=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&(S.drillFilter==="turn"||d.topic===S.drillTopic)&&(S.drillFilter!=="todo"||!submitted(d.id,S.uid))&&(S.drillFilter!=="turn"||dState(d)==="turn")&&(S.drillFilter!=="fav"||isFav("drill",d.id)))
-    .sort((a,b)=>String(b.created_at||"").slice(0,10).localeCompare(String(a.created_at||"").slice(0,10))||((b.for_author===S.uid)-(a.for_author===S.uid))||a.sort-b.sort);  // 새 묶음이 위로, 그 안에서 나를 위한 문장이 먼저
+    .sort((a,b)=>doneLast(a.id,dState(a),b.id,dState(b))||newer(a,b)||((b.for_author===S.uid)-(a.for_author===S.uid))||a.sort-b.sort);  // 안 낸 것 → 새 묶음 → 나를 위한 문장 순
   // 상대가 먼저 낸 문장 요약: 새 묶음이 위에 있어 주황 카드가 아래에 묻히지 않게 맨 위에 모아 알려 준다
   {const turn=S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&dState(d)==="turn");
    if(S.drillFilter==="turn")h+='<div class="turn-bar on">✋ 상대가 먼저 낸 문장만 모아 보는 중 ('+turn.length+'개, 모든 주제) <button class="link" data-action="drill-filter" data-v="all">전체 보기</button></div>';
@@ -1415,11 +1422,11 @@ document.addEventListener("click",async e=>{
     const t=val("qe-title-"+id);if(!t){flash("제목을 입력해 주세요.");return}
     if(await write(()=>S.sb.from("requests").update({title:t,kind:val("qe-kind-"+id),body:val("qe-body-"+id),updated_at:new Date().toISOString()}).eq("id",id),"건의를 수정했어요.")){S.reqEdit=null;clear(["qe-title-"+id,"qe-kind-"+id,"qe-body-"+id]);render()}
   }
-  else if(a==="sess-level"){S.sessLevel=b.dataset.v;render()}
+  else if(a==="sess-level"){S.sessLevel=b.dataset.v;S.pinDone.clear();render()}
   else if(a==="sess-turn"){S.sessTurn=!S.sessTurn;render()}
-  else if(a==="drill-topic"){S.drillTopic=b.dataset.v;render()}
+  else if(a==="drill-topic"){S.drillTopic=b.dataset.v;S.pinDone.clear();render()}
   else if(a==="drill-filter"){S.drillFilter=b.dataset.v;render()}
-  else if(a==="drill-dir"){S.drillDir=b.dataset.v;render()}
+  else if(a==="drill-dir"){S.drillDir=b.dataset.v;S.pinDone.clear();render()}
   else if(a==="model-toggle"){const k=b.dataset.k;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
   else if(a==="fb-req"){
     const {data,error}=await S.sb.from("feedback_requests").insert({target_type:b.dataset.type,target_id:id}).select("id").single();
@@ -1494,7 +1501,7 @@ document.addEventListener("click",async e=>{
   else if(a==="drill-save"){
     const v=((document.getElementById("da-"+id)||{}).value||"").trim();
     if(!v){flash("번역을 입력해 주세요.");return}
-    document.activeElement&&document.activeElement.blur();
+    document.activeElement&&document.activeElement.blur();S.pinDone.add(id);
     if(await write(()=>S.sb.from("drill_answers").upsert({drill_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 제출했어요.")){clear(["da-"+id]);S.editing.delete("d:"+id);render()}
   }
   else if(a==="past-toggle"){const k=b.dataset.k;S.open.has(k)?S.open.delete(k):S.open.add(k);render()}
@@ -1519,7 +1526,7 @@ document.addEventListener("click",async e=>{
     if(!S.uid)return;const v=((document.getElementById("v-"+id)||{}).value||"").trim();
     document.activeElement&&document.activeElement.blur();
     if(!v){flash("번역을 입력해 주세요.");return}
-    if(await write(()=>S.sb.from("session_versions").upsert({session_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 저장했어요.")){clear(["v-"+id]);S.editing.delete("ver:"+id);render()}
+    S.pinDone.add(id);if(await write(()=>S.sb.from("session_versions").upsert({session_id:id,author:S.uid,body:v,updated_at:new Date().toISOString()}),"번역을 저장했어요.")){clear(["v-"+id]);S.editing.delete("ver:"+id);render()}
   }else if(a==="save-field"){
     const k=b.dataset.k,v=((document.getElementById(k+"-"+id)||{}).value||"").trim();
     if(!v){flash("내용을 입력해 주세요.");return}
@@ -1615,7 +1622,7 @@ function collapseAll(){
 }
 function setTab(t){
   if(!TABS.includes(t))return;
-  S.tab=t;
+  S.tab=t;S.pinDone.clear();
   if(location.pathname!==tabUrl(t)||location.hash)history.pushState(null,"",tabUrl(t));
   render();window.scrollTo({top:0});
 }
