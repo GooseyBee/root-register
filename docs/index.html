@@ -835,8 +835,8 @@ function fbBlock(type,id){
     const who=f.by==="claude"?"Claude 피드백":"⚡ AI 피드백 (Gemini)";
     h+='<div class="fb done"'+(f.seen_at?'':' data-fb-unseen="'+esc(f.id)+'"')+'><p class="sub" style="margin:0">'+who+' <span class="note">· '+esc(fmtTime(f.answered_at))+'</span></p><div class="fb-body">'+esc(f.answer)+'</div></div>';
   }else if(!f.claude_requested_at){
-    if(S.fbBusy.has(f.id))return '<div class="fb wait"><span class="chip">AI가 설명을 쓰는 중…</span></div>';
-    h+='<div class="fb wait"><span class="chip">답변 대기 · '+esc(fmtTime(f.created_at))+'</span><span class="note">'+(f.error?'자동 답변이 안 됐어요('+esc(f.error)+'). 다시 시도하거나 Claude 정밀 검토를 요청해 보세요.':'곧 설명이 달려요.')+'</span>'+
+    if(S.fbBusy.has(f.id))return '<div class="fb wait"><span class="chip">AI가 설명을 쓰는 중…</span><span class="note">보통 10~30초, 붐비면 1분쯤 걸려요. 다른 문장을 풀고 있어도 도착하면 알려 드려요.</span></div>';
+    h+='<div class="fb wait"><span class="chip">답변 대기 · '+esc(fmtTime(f.created_at))+'</span><span class="note">'+(f.error?'Gemini가 붐벼서 아직 못 받았어요. 10분마다 자동으로 다시 시도해요('+esc(f.tries||1)+'/3). 급하면 다시 시도하거나 Claude 정밀 검토를 요청해 보세요.':'설명을 쓰는 중이에요. 도착하면 알려 드려요.')+'</span>'+
       '<button class="btn small" data-action="fb-retry" data-id="'+esc(f.id)+'">다시 시도</button><button class="link" data-action="fb-cancel" data-id="'+esc(f.id)+'">요청 취소</button></div>';
   }
   // ② Claude 정밀 검토
@@ -857,12 +857,15 @@ async function callAssist(body){
   try{const {data,error}=await S.sb.functions.invoke("assist",{body});if(error)throw error;return data||{}}
   catch(e){return {error:String(e&&e.message||e)}}
 }
+// Gemini가 붐비면 30~70초 걸린다. 그동안 폰 화면이 꺼지거나 다른 앱으로 가면 응답을 못 받지만 서버는 계속 일한다.
+// 그래서 연결이 끊긴 건 실패로 보지 않고, 답은 실시간 갱신·알림으로 받는다. 서버가 실패를 알려 줄 때만 실패로 띄운다.
 async function runFeedback(id){
   S.fbBusy.add(id);render();
   const r=await callAssist({action:"feedback",id});
   S.fbBusy.delete(id);await reload("feedback");
   if(r.status==="answered")flash("피드백이 도착했어요.");
-  else flash("자동 답변이 안 됐어요. "+(r.error||"잠시 뒤 다시 시도해 주세요."));
+  else if(r.status==="pending")flash("Gemini가 붐벼서 아직 못 받았어요. 10분마다 자동으로 다시 시도하고, 도착하면 알려 드려요.");
+  else if(r.error&&!S.feedback.find(f=>f.id===id&&f.answered_at))flash("설명을 쓰는 중이에요. 도착하면 🔔와 휴대폰 알림으로 알려 드려요.");
 }
 // 화면에 보인 답변은 읽음으로 표시한다(알림 배지가 줄어든다)
 function markSeenVisible(){
