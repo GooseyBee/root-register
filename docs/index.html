@@ -645,7 +645,7 @@ function vSessions(){
     const vers=s.versions||{},mine=S.uid?vers[S.uid]:"";
     const others=Object.keys(vers).filter(k=>k!==S.uid&&vers[k]);
     const pp=sessPair(s);
-    return '<details class="sess pair-'+pp.st+'" data-hl="session:'+esc(s.id)+'" data-key="'+key+'"'+(open?" open":"")+'><summary>'+(pp.st!=="none"?'<span class="pst-row">'+pairBadge(pp.st,pp.others)+'</span>':'')+'<span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.date?'<span class="sdate">'+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
+    return '<details class="sess pair-'+pp.st+'" data-hl="session:'+esc(s.id)+'" data-key="'+key+'"'+(open?" open":"")+'><summary>'+(pp.st!=="none"?'<span class="pst-row">'+pairBadge(pp.st,pp.others)+'</span>':'')+'<span class="sno">'+esc(s.no)+'회차</span><span class="stitle">'+esc(s.title)+'</span><span class="chip lv-'+esc(s.level)+'">'+esc(s.level)+'</span><span class="chip '+(String(s.dir).startsWith("KR")?"ko":"en")+'">'+esc(s.dir)+'</span>'+(s.created_at?'<span class="sdate" title="원문이 올라온 날">'+esc(kstDay(s.created_at))+' 올라옴</span>':"")+(s.date?'<span class="sdate" title="모임 날짜">모임 '+esc(s.date)+'</span>':"")+starBtn("session",s.id)+'</summary>'+
       '<div class="sbody"><div><p class="sub">원문</p><div class="hl-wrap"><p class="src">'+markQuotes(s.source,"session",s.id)+'</p>'+hlList("session",s.id)+'</div></div>'+
       '<div><p class="sub">번역</p><div class="vers">'+
         (S.canWrite&&S.uid?myVersion(s,mine):(mine?'<div class="ver">'+whoHTML(S.uid)+'<p>'+esc(mine)+'</p></div>':""))+
@@ -777,6 +777,8 @@ function commentBlock(type,id){
 
 /* ---------- today's sentence ---------- */
 const seoulToday=()=>new Date().toLocaleDateString("en-CA",{timeZone:"Asia/Seoul"});
+// 시각(timestamptz)을 한국 날짜로: 2026. 9. 28.
+const kstDay=t=>fmtDay(new Date(t).toLocaleDateString("sv-SE",{timeZone:"Asia/Seoul"}));
 function fmtDay(d){const [y,m,dd]=String(d).split("-");return y+". "+(+m)+". "+(+dd)+"."}
 // 뜻·설명·어려운 단어·출처 용어 (오늘 카드와 지난 문장이 같이 쓴다)
 function dailyBack(d){
