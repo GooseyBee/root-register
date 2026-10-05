@@ -291,6 +291,9 @@ details.sess>summary::-webkit-details-marker{display:none}
 .fb-confirm{display:inline-flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
 .fb.done{display:grid;gap:6px;background:var(--en-soft);border-radius:10px;padding:12px 14px}
 .fb-body{white-space:pre-wrap;font-size:14px;line-height:1.65}
+.retry-card{border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:8px;padding:10px 12px;display:grid;gap:8px}
+.retry-card.done{border-left-color:var(--ok)}
+mark.chg{background:color-mix(in srgb,var(--warn) 30%,transparent);color:inherit;border-radius:3px;padding:0 2px}
 .fb.done.claude{background:var(--ko-soft)}
 details.report{border-color:var(--en)}
 .past-report summary{cursor:pointer;font-size:13px;color:var(--muted)}
@@ -444,7 +447,7 @@ const S={
   sb:null,uid:null,canWrite:true,dbState:"loading",sent:null,
   terms:[],sessions:[],taglines:[],comments:[],favs:new Set(),daily:null,dailyPast:[],dailyOpen:false,dailyErr:"",
   favOnly:{terms:false,sessions:false,taglines:false,requests:false},
-  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),pinDone:new Set(),reports:[],hls:[],hlFilter:"all",notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
+  drills:[],drillAns:[],drillModels:{},drillStatus:[],drillTopic:"marketing",drillDir:"KR→EN",sessModels:{},feedback:[],mistakes:[],fbQueue:[],fbBusy:new Set(),pinDone:new Set(),retries:[],retryBusy:new Set(),peek:new Set(),reports:[],hls:[],hlFilter:"all",notifyOff:[],nreads:new Set(),isAdmin:false,notifOpen:false,pushState:"unknown",sessLevel:"all",sessTurn:false,drillFilter:"all",requests:[],reqFilter:"open",reqEdit:null,editing:new Set(),sessStatus:[],pastFilter:"all",pastLimit:20,briefs:[],copyStatus:[],names_c:[],nameVotes:[],cmtOpen:new Set(),replyTo:null,cmtLikes:[],
   review:{exists:false,items:{}},
   tab:"daily",revealed:false,reviewLang:"all",seen:{},
   f:{q:"",lang:"all",reg:"all",dom:"all"},
@@ -1119,6 +1122,72 @@ function vNotes(){
   for(const x of l){const d=day(x.created_at);if(d!==cur){h+='<p class="sub notes-day">'+esc(d)+'</p>';cur=d}h+=hlItem(x,true)}
   return h;
 }
+// ---------- 다시 도전 (혜림 님 건의): 1주일 지난 문장을 지난 번역은 가린 채 다시 번역, 3차까지 ----------
+// 1차 = 처음 제출(drill_answers), 2·3차 = drill_retries. 앞 차수에서 7일 지나면 열리고, 하루 3문장까지만 보여 줘요.
+const RETRY_GAP=7*864e5,RETRY_DAY=3;
+const kstDate=t=>new Date(t).toLocaleDateString("sv-SE",{timeZone:"Asia/Seoul"});
+function myTries(id){
+  const a=S.drillAns.find(x=>x.drill_id===id&&x.author===S.uid);if(!a)return [];
+  return [{attempt:1,body:a.body,created_at:a.created_at||a.updated_at}].concat(S.retries.filter(r=>r.drill_id===id&&r.author===S.uid).sort((x,y)=>x.attempt-y.attempt));
+}
+function retryPlan(){
+  const now=Date.now(),td=kstDate(now),due=[];let next=0;
+  const doneToday=S.retries.filter(r=>r.author===S.uid&&kstDate(r.created_at)===td).sort((x,y)=>String(y.created_at).localeCompare(String(x.created_at)));
+  for(const a of S.drillAns.filter(x=>x.author===S.uid)){
+    const d=S.drills.find(x=>x.id===a.drill_id);if(!d)continue;
+    const t=myTries(d.id);if(t.length>=3)continue;
+    const at=new Date(t[t.length-1].created_at).getTime()+RETRY_GAP;
+    if(at<=now)due.push({d,attempt:t.length+1,at});else if(!next||at<next)next=at;
+  }
+  due.sort((x,y)=>x.at-y.at);  // 오래 기다린 문장부터
+  const left=Math.max(0,RETRY_DAY-doneToday.length);
+  return {due,today:due.slice(0,left),doneToday,left,next};
+}
+// 앞 차수에 없던 단어를 칠해서 무엇이 달라졌는지 한눈에 보이게
+const wnorm=w=>w.toLowerCase().replace(/[.,!?;:"'“”‘’()…~·]/g,"");
+function diffMark(text,prev){
+  const seen=new Set(String(prev||"").split(/\s+/).map(wnorm).filter(Boolean));
+  return String(text||"").split(/(\s+)/).map(w=>/^\s+$/.test(w)||!wnorm(w)||seen.has(wnorm(w))?esc(w):'<mark class="chg">'+esc(w)+'</mark>').join("");
+}
+function retryResult(id,lang){
+  const t=myTries(id),last=t[t.length-1],m=S.drillModels[id];
+  let h='<div class="vers">'+t.map((x,i)=>'<div class="ver"><p class="sub" style="margin:0">'+x.attempt+'차 · '+esc(fmtDay(kstDate(x.created_at)))+'</p><p lang="'+lang+'">'+(i?diffMark(x.body,t[i-1].body):esc(x.body))+'</p></div>').join("")+'</div>';
+  h+='<p class="note" style="margin:0"><mark class="chg">칠한 단어</mark>는 바로 앞 차수에 없던 표현이에요.</p>';
+  if(m)h+='<div class="model"><p class="sub" style="margin:0">추천 표현</p><p class="best" lang="'+lang+'">'+esc(m.best)+'</p></div>';
+  if(last.attempt>1){
+    if(last.analysis)h+='<div class="fb-box"><p class="sub" style="margin:0">⚡ 달라진 점 분석 (Gemini)</p><div class="fb-body">'+esc(last.analysis)+'</div></div>';
+    else if(S.retryBusy.has(last.id))h+='<div class="fb wait"><span class="chip">분석 중</span><span class="note">무엇이 달라졌는지 보고 있어요. 보통 10~30초, 붐비면 1분쯤 걸려요…</span></div>';
+    else h+='<div class="fb"><button class="btn small" data-action="retry-ai" data-id="'+esc(last.id)+'">⚡ 달라진 점 분석받기</button><span class="note">좋아진 점, 자꾸 반복하는 표현과 그 이유를 짚어 줘요.</span></div>';
+  }
+  return h;
+}
+function vRetry(p){
+  if(!S.uid||!S.canWrite)return "";
+  if(!p.due.length&&!p.doneToday.length&&!p.next)return "";
+  const open=S.open.has("retry")||(!S.open.has("retry-touched")&&(p.today.length>0||p.doneToday.length>0));
+  const head='🔁 다시 도전 · 오늘 '+p.doneToday.length+'/'+RETRY_DAY+(p.today.length?' <span class="chip bad">'+p.today.length+'문장 대기</span>':'');
+  let b='<p class="note" style="margin:0">1주일 전에 낸 문장을 <b>지난 번역은 보지 않고</b> 다시 옮겨요. 내면 지난 번역과 나란히 보여 주고, 무엇이 달라졌는지 분석해 드려요. 한 문장은 3차까지, 하루 3문장까지예요.</p>';
+  for(const x of p.today){
+    const d=x.d,lang=langOf(d.dir||"KR→EN");
+    b+='<div class="retry-card"><p class="ctx"><span class="chip bad">'+x.attempt+'차 도전</span> '+esc(d.context)+'</p><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+esc(d.source||d.ko)+'</p>'+
+      '<label class="f">'+x.attempt+'차 번역<textarea id="rt-'+esc(d.id)+'" lang="'+lang+'" placeholder="지난 번역은 잊고 새로 옮겨 보세요"></textarea></label>'+
+      '<div class="row-actions"><button class="btn small primary" data-action="retry-save" data-id="'+esc(d.id)+'" data-n="'+x.attempt+'">제출하고 비교하기</button></div></div>';
+  }
+  if(!p.today.length)b+='<p class="note" style="margin:0">'+(p.due.length?'오늘 몫은 끝냈어요. 남은 '+p.due.length+'문장은 내일부터 3개씩 열려요.':p.next?'다음 문장은 '+esc(fmtDay(kstDate(p.next)))+'에 열려요.':'')+'</p>';
+  for(const r of p.doneToday){
+    const d=S.drills.find(x=>x.id===r.drill_id);if(!d)continue;
+    b+='<div class="retry-card done"><p class="ctx"><span class="chip done">'+r.attempt+'차 완료</span> '+esc(d.context)+'</p><p class="ko">'+esc(d.source||d.ko)+'</p>'+retryResult(d.id,langOf(d.dir||"KR→EN"))+'</div>';
+  }
+  return '<details class="add retry" data-key="retry"'+(open?" open":"")+'><summary>'+head+'</summary><div class="gbody">'+b+'</div></details>';
+}
+async function runRetryAi(id){
+  S.retryBusy.add(id);render();
+  const r=await callAssist({action:"retry-compare",id});
+  S.retryBusy.delete(id);await reload("drills");
+  if(r.status==="answered")flash("분석이 도착했어요.");
+  else if(r.status==="pending")flash("Gemini가 붐벼서 아직 못 받았어요. 잠시 뒤 다시 눌러 주세요.");
+  else if(r.error&&!S.retries.find(x=>x.id===id&&x.analyzed_at))flash("분석을 쓰는 중이에요. 잠시 뒤 화면을 새로 고쳐 보세요.");
+}
 function vMistakes(){
   const list=S.mistakes.filter(m=>m.author===S.uid).sort((a,b)=>b.count-a.count||String(b.last_seen).localeCompare(String(a.last_seen)));
   const body=list.length?'<ol class="mistakes">'+list.map(m=>'<li><div class="mk-row"><span class="mk-wrong" lang="'+esc(m.lang)+'">'+esc(m.wrong)+'</span><span aria-hidden="true">→</span><span class="mk-better" lang="'+esc(m.lang)+'">'+esc(m.better)+'</span>'+(m.count>1?'<span class="chip bad">'+m.count+'번</span>':"")+'</div>'+(m.why?'<p class="note" style="margin:0">'+esc(m.why)+'</p>':"")+'</li>').join("")+'</ol>'
@@ -1127,13 +1196,13 @@ function vMistakes(){
 }
 function vDrillGuide(){
   return guideBox("guide-drill","번역 연습은 이렇게 써요",
-    '<p>짧은 문장을 혼자 옮겨 보는 매일 연습이에요. 정해진 주기는 없고, <b>하루 1~2문장</b>이면 충분해요.</p>'+
+    '<p>짧은 문장을 혼자 옮겨 보는 연습이에요. <b>매주 월요일 새 문장 5개</b>가 올라오고, 1주일 전에 낸 문장은 <b>🔁 다시 도전</b>으로 하루 3개까지 다시 옮겨 봐요.</p>'+
     '<p class="sub" style="margin:0">진행 순서</p><ol>'+
       '<li><b>방향</b>을 골라요. 희주는 <b>한→영</b>, 혜림은 <b>영→한</b>이 먼저 열리지만, 다른 방향도 눌러서 풀 수 있어요.</li>'+
       '<li>주제를 고르고 <b>내 번역</b>을 써서 <b>제출</b>해요. 제출하면 잠기고, 고치려면 <b>수정</b>을 눌러요.</li>'+
       '<li>제출하면 <b>추천 표현</b>이 열려요. 상대도 제출했다면 상대 번역도 보여요.</li>'+
       '<li>왜 틀렸는지 궁금하면 두 가지로 물어볼 수 있어요. <b>⚡ AI에게 바로 묻기</b>는 Gemini가 몇 초 만에 답해요. <b>🔍 Claude 정밀 검토</b>는 Claude가 더 깊게 보고 Gemini 설명이 맞는지도 확인해요. 정밀 검토는 하루 3번(오전 9시·오후 1시·밤 9시쯤) 답이 달리고, 도착하면 알림이 가요.</li>'+
-      '<li>문장에서 단어나 숙어를 드래그(폰은 길게 눌러 선택)하고 <b>🖍 메모</b>를 누르면 형광펜과 메모가 남아요. 나만 보고, 위쪽 <b>🖍 메모</b>에서 모아 볼 수 있어요.</li><li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
+      '<li>문장에서 단어나 숙어를 드래그(폰은 길게 눌러 선택)하고 <b>🖍 메모</b>를 누르면 형광펜과 메모가 남아요. 나만 보고, 위쪽 <b>🖍 메모</b>에서 모아 볼 수 있어요.</li><li><b>🔁 다시 도전</b>: 제출하고 1주일이 지난 문장은 지난 번역을 가린 채 다시 번역해요(3차까지). 내면 차수별 번역이 나란히 보이고, 앞 차수에 없던 단어가 칠해져요. <b>⚡ 달라진 점 분석</b>은 좋아진 점과 자꾸 반복하는 표현, 그 이유를 짚어 줘요.</li><li>자주 틀리는 표현은 <b>내 오답 노트</b>에 모이고, 또 틀리면 횟수가 올라가요. 매주 월요일 Claude가 오답 노트를 보고 <b>나를 위한 문장</b>을 섞어 넣고, <b>📋 이번 주 리포트</b>(자주 틀린 것과 고치는 법)를 보내요.</li>'+
     '</ol>'+
     '<p class="note" style="margin:0">카드 왼쪽 색: <b>주황 ✋</b> 상대가 먼저 제출(내 차례), <b>초록 ✓</b> 둘 다 제출, <b>파랑</b> 나만 제출. <b>✋ 내 차례</b>를 누르면 그 문장만 모아 봐요. 교차번역도 같아요.</p>'+
     '<p class="note" style="margin:0">코멘트는 그 문장을 제출한 사람에게만 보여요. 피드백과 오답 노트는 나만 봐요.</p>');
@@ -1144,7 +1213,8 @@ function vDrills(){
   const lang=langOf(S.drillDir);
   const dState=d=>pairState(submitted(d.id,S.uid),members.filter(m=>m!==S.uid&&submitted(d.id,m)));
   const turnCount=f=>S.drills.filter(d=>(d.dir||"KR→EN")===S.drillDir&&f(d)&&dState(d)==="turn").length;
-  let h=vDrillGuide()+vReports()+vMistakes();
+  const rp=retryPlan(),hideIds=new Set(rp.today.map(x=>x.d.id));  // 오늘 다시 도전할 문장은 카드에서도 지난 번역을 가린다
+  let h=vDrillGuide()+vReports()+vRetry(rp)+vMistakes();
   h+='<div class="rv-top"><div class="seg" role="group" aria-label="방향">'+
     DIRS.map(([k,l])=>'<button data-action="drill-dir" data-v="'+k+'" aria-pressed="'+(S.drillDir===k)+'">'+l+'</button>').join("")+'</div>'+
     '<div class="seg" role="group" aria-label="주제">'+
@@ -1169,12 +1239,18 @@ function vDrills(){
     const st=dState(d),oth=members.filter(m=>m!==S.uid&&submitted(d.id,m));
     let c='<article class="card drill pair-'+st+'" id="drill-'+esc(d.id)+'" data-hl="drill:'+esc(d.id)+'">'+(st!=="none"?'<div class="pst-row">'+pairBadge(st,oth)+'</div>':'')+'<p class="ctx">'+pchip+(fresh?'<span class="chip by-user">새 문장</span> ':'')+esc(d.context)+'</p><div class="hl-wrap"><p class="ko" lang="'+(lang==="en"?"ko":"en")+'">'+markQuotes(d.source||d.ko,"drill",d.id)+'</p>'+hlList("drill",d.id)+'</div>'+
       '<div class="status">'+members.map(m=>'<span class="chip'+(submitted(d.id,m)?" done":"")+'">'+esc(m===S.uid?"나":(S.names[m]&&S.names[m].name)||m.split("@")[0])+(submitted(d.id,m)?" · 제출함":" · 아직")+'</span>').join("")+'</div>';
+    if(mine&&hideIds.has(d.id)&&!S.peek.has(d.id)){
+      c+='<div class="ver retry-hide"><p class="note" style="margin:0">🔁 오늘 다시 도전할 문장이라 지난 번역과 추천 표현을 가려 뒀어요. 위 <b>다시 도전</b>에서 먼저 번역해 보세요.</p><div><button class="link" data-action="retry-peek" data-id="'+esc(d.id)+'">그냥 볼게요</button></div></div>';
+      c+='<div class="social">'+starBtn("drill",d.id)+commentBlock("drill",d.id)+'</div></article>';
+      return c;
+    }
     if(S.canWrite)c+=lockBox({key:"d:"+d.id,label:"내 번역",value:mine?mine.body:"",at:mine&&mine.updated_at,ta:"da-"+d.id,action:"drill-save",attrs:'data-id="'+esc(d.id)+'"',lang,ph:lang==="en"?"영어로 번역해 보세요":"한국어로 번역해 보세요",submitLabel:"제출",savedWord:"제출함",hint:"제출하면 잠겨요. 추천 표현이 열려요."});
     if(mine){
       if(others.length)c+='<div class="vers">'+others.map(a=>'<div class="ver">'+whoHTML(a.author)+'<p lang="'+lang+'">'+esc(a.body)+'</p></div>').join("")+'</div>';
       else c+='<p class="note">상대가 제출하면 번역이 보여요.</p>';
       if(model)c+=modelHTML(model,lang,"model-"+d.id,d.id);
       c+=fbBlock("drill",d.id);
+      if(myTries(d.id).length>1)c+='<details class="add" data-key="rh-'+esc(d.id)+'"'+(S.open.has("rh-"+d.id)?" open":"")+'><summary>🔁 다시 도전 기록 '+myTries(d.id).length+'차까지</summary><div class="gbody">'+retryResult(d.id,lang)+'</div></details>';
     }else c+='<p class="note">제출하면 추천 표현과 코멘트가 열려요.</p>';
     c+='<div class="social">'+starBtn("drill",d.id)+commentBlock("drill",d.id)+'</div></article>';
     return c;
@@ -1501,6 +1577,17 @@ document.addEventListener("click",async e=>{
     if(error){flash("다시 요청하지 못했어요.");return}
     await reload("feedback");runFeedback(data.id);
   }
+  else if(a==="retry-peek"){S.peek.add(id);render()}
+  else if(a==="retry-ai"){runRetryAi(id)}
+  else if(a==="retry-save"){
+    const v=((document.getElementById("rt-"+id)||{}).value||"").trim();
+    if(!v){flash("번역을 입력해 주세요.");return}
+    document.activeElement&&document.activeElement.blur();
+    const {data,error}=await S.sb.from("drill_retries").insert({drill_id:id,attempt:+b.dataset.n,body:v}).select("id").single();
+    if(error){flash("저장하지 못했어요. 잠시 뒤 다시 해 주세요.");return}
+    clear(["rt-"+id]);flash(b.dataset.n+"차 번역을 냈어요. 지난 번역과 비교해 볼게요.");
+    await reload("drills");if(data&&data.id)runRetryAi(data.id);
+  }
   else if(a==="drill-save"){
     const v=((document.getElementById("da-"+id)||{}).value||"").trim();
     if(!v){flash("번역을 입력해 주세요.");return}
@@ -1602,6 +1689,7 @@ document.addEventListener("click",e=>{const nk=e.target.closest("[data-nkey]");i
 document.addEventListener("toggle",e=>{
   const d=e.target;if(!(d instanceof HTMLDetailsElement)||!d.dataset.key)return;
   if(d.dataset.key.startsWith("sess-"))S.open.add("touched-sess");
+  if(d.dataset.key==="retry")S.open.add("retry-touched");
   if(d.open)S.open.add(d.dataset.key);else S.open.delete(d.dataset.key);
 },true);
 document.addEventListener("focusout",()=>{setTimeout(()=>{if(S.pending)render()},0)});
@@ -1721,6 +1809,7 @@ const loaders={
     for(const r of [a,b,c,d])if(r.error)throw r.error;
     S.drills=a.data;S.drillAns=b.data;S.drillStatus=d.data||[];
     S.drillModels={};for(const m of c.data)S.drillModels[m.drill_id]=m;
+    {const {data:r,error}=await S.sb.from("drill_retries").select("*");S.retries=error?[]:(r||[])}
   },
   async feedback(){
     const [a,b]=await Promise.all([S.sb.from("feedback_requests").select("*"),S.sb.from("mistake_notes").select("*")]);
@@ -1739,7 +1828,7 @@ const loaders={
   async reviews(){const {data,error}=await S.sb.from("reviews").select("*");if(error)throw error;
     const items={};for(const r of data)items[r.term_id]={box:r.box,due:r.due,last:r.last};S.review={exists:true,items}}
 };
-const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",weekly_reports:"feedback",highlights:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
+const TABLE_TO_LOADER={terms:"terms",sessions:"sessions",session_versions:"sessions",taglines:"taglines",copy_briefs:"taglines",comments:"comments",comment_likes:"comments",favorites:"favorites",daily_sentences:"daily",drills:"drills",drill_answers:"drills",drill_retries:"drills",requests:"requests",feedback_requests:"feedback",mistake_notes:"feedback",weekly_reports:"feedback",highlights:"feedback",name_candidates:"names",name_votes:"names",reviews:"reviews"};
 async function reload(which){
   const keys=which?[which]:Object.keys(loaders);
   await Promise.all(keys.map(k=>loaders[k]().catch(()=>{})));

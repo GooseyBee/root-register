@@ -9,7 +9,7 @@ Claude Code 루틴이 이 문서를 읽고 그대로 실행해요. 사람이 고
 ```mermaid
 flowchart TD
   S[월요일 8:50 루틴 시작] --> R[기존 문장·진행 상황 읽기]
-  R --> D[번역 연습: 방향마다 12문장 작성·검수<br/>그중 사람마다 2~4문장은 오답 노트 맞춤]
+  R --> D[번역 연습: 모두 5문장 작성·검수<br/>그중 사람마다 1문장은 오답 노트 맞춤]
   R --> RP[주간 리포트: 사람마다 1개 → 알림]
   R --> CB[영어 카피 브리프 3개]
   D --> I1[drills + drill_models 한 트랜잭션]
@@ -29,8 +29,10 @@ flowchart TD
 
 > **한글 톤은 [`notes/style/korean-voice.md`](../style/korean-voice.md)를 따라요.** 마케팅은 세련된 브랜드 카피(상투어·재촉·최상급 금지), 비즈니스는 깔끔하게, 일상은 요즘 구어, 안내문은 실제 안내문 말투. 번역투(~을 통해, ~에 대한)는 빼요.
 
-## 2. 번역 연습 (매주)
-방향마다 12문장, 주제(`marketing`, `business`, `daily`, `travel`)마다 3문장씩, 모두 24문장.
+## 2. 번역 연습 (매주 5문장)
+**모두 5문장**이에요(2026-10-05부터, 희주 님 요청). 새 문장을 줄이고, 1주일 지난 문장은 앱의 🔁 다시 도전으로 다시 옮겨요.
+- 방향: 한 방향 3문장 + 다른 방향 2문장. 주마다 번갈아요(지난주에 `KR→EN`이 3이었으면 이번 주는 `EN→KR`이 3). 지난주 비율은 `select dir, count(*) from drills where created_at > now() - interval '8 days' group by 1;`로 확인해요.
+- 주제(`marketing`, `business`, `daily`, `travel`)는 5문장 안에서 최소 3가지가 들어가게 섞어요. 지난주에 적었던 주제를 먼저 넣어요.
 
 | 방향 | 원문 | 추천 표현 | 누구 기본 |
 |---|---|---|---|
@@ -42,13 +44,13 @@ flowchart TD
 - 추천 표현: `best` 1개, `alternatives` 2개, `notes` 2~3개(`phrase`, `why`: 직역하면 왜 어색한지, 격이 어떻게 다른지). 설명은 해요체.
 - 실존 회사·인물·통계·시사 사실은 쓰지 않아요(틀릴 수 있어서).
 - **검수**: 넣기 전에 문장마다 다시 읽고 확인해요. 영어는 원어민이 실제로 쓰는 말인지, 관용 표현의 뜻이 맞는지, 한국어는 번역투 없이 자연스러운지, 맞춤법과 띄어쓰기가 맞는지. 확신이 없는 관용 표현은 웹 검색으로 확인하거나 다른 표현으로 바꿔요.
-- id: `dr-YYYYMMDD-ke-m1`(한→영 마케팅 1), `dr-YYYYMMDD-ek-t3`(영→한 여행 3)처럼 날짜(한국 시간)·방향·주제·번호. `sort`는 주제 안에서 1~3.
+- id: `dr-YYYYMMDD-ke-m1`(한→영 마케팅 1), `dr-YYYYMMDD-ek-t1`(영→한 여행 1)처럼 날짜(한국 시간)·방향·주제·번호. `sort`는 주제 안에서 1부터.
 
 ```sql
 begin;
 insert into public.drills (id, dir, topic, sort, context, source) values
   ('dr-20261005-ke-m1','KR→EN','marketing',1,'상황','원문'),
-  ...;  -- 24문장을 한 문장(statement)으로. 알림이 한 번만 가요.
+  ...;  -- 5문장을 한 문장(statement)으로. 알림이 한 번만 가요.
 insert into public.drill_models (drill_id, best, alternatives, notes) values
   ('dr-20261005-ke-m1','best','["alt1","alt2"]','[{"phrase":"...","why":"..."}]'),
   ...;
@@ -57,9 +59,9 @@ commit;
 작은따옴표는 `''`로 이스케이프해요.
 
 ### 2-1. 맞춤 문장 (오답 노트 기반)
-24문장 가운데 **사람마다 2~4문장**은 그 사람의 실수 패턴을 겨냥해 써요. 위와 같은 트랜잭션, 같은 insert 문 안에 넣어요(알림이 한 번만 가요).
+5문장 가운데 **사람마다 1문장**은 그 사람의 실수 패턴을 겨냥해 써요. 위와 같은 트랜잭션, 같은 insert 문 안에 넣어요(알림이 한 번만 가요).
 - [ ] 오답 노트 읽기: `select m.display_name, n.author, n.lang, n.wrong, n.better, n.why, n.count, n.last_seen from mistake_notes n join members m on m.email = n.author order by n.author, n.count desc, n.last_seen desc;`
-- [ ] 사람마다 자주 틀린(count 높은 순)·최근 틀린 패턴 1~2개를 골라, 그 함정이 자연스럽게 들어간 **새 문장**을 써요. 틀렸던 문장을 그대로 다시 내지 않아요.
+- [ ] 사람마다 자주 틀린(count 높은 순)·최근 틀린 패턴 1개를 골라, 그 함정이 자연스럽게 들어간 **새 문장**을 써요. 틀렸던 문장을 그대로 다시 내지 않아요.
 - [ ] 방향은 그 사람의 기본 방향(위 표)으로 해요.
 - [ ] `for_author`에 그 사람 이메일(쿼리 결과의 `author`), `focus`에 연습 포인트 한 줄(예: `'~에 대한' 번역투`, `'meet'을 직역`). 화면에 "나를 위한 문장 · (focus)"로 보여요.
 - [ ] 오답 노트가 비어 있는 사람은 맞춤 문장 없이 보통 문장으로 채워요.
@@ -129,7 +131,7 @@ commit;
 ```
 
 ## 4. 기록과 보고
-- [ ] 넣은 SQL을 `supabase/data/YYYYMMDD_weekly_content.sql`로 저장하고 `main`에 커밋·push해요(커밋 메시지: `Weekly content YYYY-MM-DD: 24 drills (+ session N)`).
-- [ ] 확인 쿼리: 새 id의 `drills`·`drill_models` 개수가 각각 24인지, `copy_briefs`가 3개 들어갔는지, 교차번역을 넣었으면 `sessions`·`session_models`가 6인지.
+- [ ] 넣은 SQL을 `supabase/data/YYYYMMDD_weekly_content.sql`로 저장하고 `main`에 커밋·push해요(커밋 메시지: `Weekly content YYYY-MM-DD: 5 drills (+ session N)`).
+- [ ] 확인 쿼리: 새 id의 `drills`·`drill_models` 개수가 각각 5인지, `copy_briefs`가 3개 들어갔는지, 교차번역을 넣었으면 `sessions`·`session_models`가 6인지.
 - [ ] 마지막에 한국어로 짧게 보고해요: 넣은 개수(그중 맞춤 문장은 누구에게 몇 개), 주간 리포트를 받은 사람, 교차번역 추가 여부(건너뛰었으면 이유), 두 사람의 진행 상황.
 - 실패하면(커넥터 오류 등) 아무것도 반쯤 넣지 말고(트랜잭션 롤백) 무엇이 실패했는지 보고해요.

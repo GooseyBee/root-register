@@ -5,6 +5,7 @@
 //   { action: "test-push", endpoint? } → 테스트 푸시. endpoint가 있으면 그 기기로만(버튼을 누른 기기), 없으면 내 모든 기기로
 //   { action: "comment-reply", id }   → 내 답장을 원래 코멘트 쓴 사람에게 푸시
 //   { action: "claude-requested", id } → Claude 정밀 검토 요청을 희주에게 푸시(루틴이 하루 3번 처리, 급하면 희주가 직접)
+//   { action: "retry-compare", id }   → 다시 도전(drill_retries) 한 차수를 앞 번역들과 비교해 Gemini가 분석(analysis)을 단다
 // DB 트리거(pg_net)가 x-hook-secret 헤더로 부른다:
 //   { action: "request-done", id }    → 건의가 완료되면 올린 사람에게 푸시
 //   { action: "content-added", kind, n, enkr, kren } → 새 번역 연습 문장·교차번역 원문이 들어오면 모두에게 푸시
@@ -72,6 +73,7 @@ Deno.serve(async (req) => {
     if (body.action === "request-posted") return json(await requestPosted(db, me as Member, String(body.id || "")));
     if (body.action === "comment-reply") return json(await commentReply(db, me as Member, String(body.id || "")));
     if (body.action === "claude-requested") return json(await claudeRequested(db, me as Member, String(body.id || "")));
+    if (body.action === "retry-compare") return json(await retryCompare(db, me as Member, String(body.id || "")));
     if (body.action === "test-push") {
       const n = await pushTo(db, "", [email], { title: "알림 테스트", body: "이 기기로 알림이 잘 와요.", url: "/" }, body.endpoint ? String(body.endpoint) : undefined);
       return json({ ok: true, sent: n });
@@ -192,6 +194,15 @@ ${model}
       },
     },
   };
+  const out = await callGemini(key, payload);
+  if (!out?.answer) throw new Error("Gemini 응답이 비어 있어요.");
+  out.answer = String(out.answer).replace(/\*\*/g, "").trim();
+  out.mistakes = Array.isArray(out.mistakes) ? out.mistakes.slice(0, 3) : [];
+  return out as { answer: string; mistakes: Mistake[] };
+}
+
+// 무료 모델을 차례로 시도해 JSON 응답을 돌려준다(피드백·다시 도전 분석이 같이 쓴다)
+async function callGemini(key: string, payload: unknown): Promise<any> {
   let last = "";
   const busy = (st: number) => st === 503 || st === 429 || st === 500;
   for (const m of MODELS) {
@@ -215,13 +226,52 @@ ${model}
     }
     const j = await r.json();
     const text = j?.candidates?.[0]?.content?.parts?.map((p: any) => p.text || "").join("") || "";
-    const out = JSON.parse(text);
-    if (!out?.answer) throw new Error("Gemini 응답이 비어 있어요.");
-    out.answer = String(out.answer).replace(/\*\*/g, "").trim();
-    out.mistakes = Array.isArray(out.mistakes) ? out.mistakes.slice(0, 3) : [];
-    return out as { answer: string; mistakes: Mistake[] };
+    return JSON.parse(text);
   }
   throw new Error((last || "사용할 수 있는 Gemini 모델이 없어요.") + " 10분 뒤 자동으로 다시 시도해요.");
+}
+
+// ---------- 다시 도전 분석 ----------
+const RETRY_SYSTEM = `너는 통번역 공부 모임의 코치야. 학습자가 같은 문장을 1주일 간격으로 다시 번역했어(앞 번역은 보지 않고).
+차수별 번역을 비교해서 한국어 해요체로 분석해 줘. 6줄 이내, 마크다운 기호(#, *, **) 없이.
+1) 좋아진 점: 앞 차수보다 나아진 표현을 "1차 표현 → 이번 표현"으로 짚기. 없으면 솔직하게 "거의 그대로예요".
+2) 반복된 표현: 차수마다 똑같이 쓴 표현이 있으면 그게 괜찮은 선택인지, 습관(직역·번역투·같은 실수)인지 이유와 함께.
+3) 아직 남은 점: 이번 번역에서 고치면 좋을 곳 1~2개.
+4) 다음에 써먹을 팁 한 줄.
+추천 번역만 정답이 아니야. 뜻과 격(말투)이 맞으면 맞다고 말해.`;
+
+async function retryCompare(db: SupabaseClient, me: Member, id: string) {
+  const { data: r } = await db.from("drill_retries").select("*").eq("id", id).eq("author", me.email).maybeSingle();
+  if (!r) return { status: "missing" };
+  if (r.analyzed_at) return { status: "answered" };
+  const t = await loadTarget(db, "drill", r.drill_id, me.email);
+  if (!t || !t.mine) return { status: "missing" };
+  const { data: prev } = await db.from("drill_retries").select("attempt,body").eq("drill_id", r.drill_id).eq("author", me.email).lt("attempt", r.attempt).order("attempt");
+  const tries = [t.mine, ...(prev || []).map((p: any) => p.body), r.body];
+  const key = Deno.env.get("GEMINI_API_KEY") || (await secret(db, "gemini_api_key"));
+  if (!key) return { status: "pending", error: "Gemini API 키가 아직 설정되지 않았어요." };
+  const { data: past } = await db.from("mistake_notes").select("wrong,better").eq("author", me.email).order("count", { ascending: false }).limit(30);
+  const prompt = `[번역 연습 · ${t.dir === "EN→KR" ? "영어→한국어" : "한국어→영어"}]
+상황: ${t.context}
+원문: ${t.source}
+${tries.map((b, i) => `${i + 1}차 번역: ${b}`).join("\n")}
+추천 번역: ${t.model ? t.model.best : "(없음)"}
+학습자의 자주 하는 실수: ${(past || []).length ? (past || []).map((p: any) => p.wrong + " → " + p.better).join(" | ") : "(없음)"}`;
+  let out: any;
+  try {
+    out = await callGemini(key, {
+      systemInstruction: { parts: [{ text: RETRY_SYSTEM }] },
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.4, responseMimeType: "application/json",
+        responseSchema: { type: "OBJECT", properties: { analysis: { type: "STRING" } }, required: ["analysis"] } },
+    });
+  } catch (e) {
+    return { status: "pending", error: String((e as Error).message || e).slice(0, 200) };
+  }
+  const analysis = String(out?.analysis || "").replace(/\*\*/g, "").trim();
+  if (!analysis) return { status: "pending", error: "Gemini 응답이 비어 있어요." };
+  await db.from("drill_retries").update({ analysis, analyzed_at: new Date().toISOString() }).eq("id", r.id);
+  return { status: "answered" };
 }
 
 // 같은 사람의 같은 실수(대소문자·공백 무시)가 있으면 횟수만 올린다
