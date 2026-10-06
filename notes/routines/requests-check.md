@@ -22,7 +22,7 @@ flowchart LR
 select r.id, r.kind, r.title, r.body, m.display_name who, r.created_at,
   (select json_agg(json_build_object('who', cm.display_name, 'body', c.body, 'at', c.created_at) order by c.created_at)
      from comments c left join members cm on cm.email = c.author
-    where c.target_type = 'request' and c.target_id = r.id) comments
+    where c.target_type = 'request' and c.target_id = r.id::text) comments
 from requests r left join members m on m.email = r.author
 where r.status = 'new'
 order by r.created_at;
